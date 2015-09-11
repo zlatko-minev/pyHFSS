@@ -328,6 +328,7 @@ class HfssDesign(COMWrapper):
         self._boundaries = design.GetModule("BoundarySetup")
         self._reporter = design.GetModule("ReportSetup")
         self._modeler = design.SetActiveEditor("3D Modeler")
+        self._optimetrics = design.GetModule("Optimetrics")
         self.modeler = HfssModeler(self, self._modeler, self._boundaries)
 
     def rename_design(self, name):
@@ -668,7 +669,7 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
         return numpy.loadtxt(fn, usecols=[1])
 
     def set_mode(self, n, phase):
-        n_modes = self.parent.n_modes
+        n_modes = int(self.parent.n_modes)
         self._solutions.EditSources(
             "TotalFields",
             ["NAME:SourceNames", "EigenMode"],
@@ -1019,6 +1020,7 @@ class HfssFieldsCalc(COMWrapper):
         self.ComplexMag_H = NamedCalcObject("ComplexMag_H", setup)
         self.ComplexMag_Jsurf = NamedCalcObject("ComplexMag_Jsurf", setup)
         self.ComplexMag_Jvol = NamedCalcObject("ComplexMag_Jvol", setup)
+        self.P_J = NamedCalcObject("P_J", setup)
 
     def clear_named_expressions(self):
         self.parent.parent._fields_calc.ClearAllNamedExpr()
@@ -1121,20 +1123,24 @@ class CalcObject(COMWrapper):
         self.calc_module.AddNamedExpr(name)
         return NamedCalcObject(name, self.setup)
 
-    def evaluate(self, phase=0):#, n_mode=1):
+    def evaluate(self, phase=0, lv=None):#, n_mode=1):
         self.write_stack()
         #self.calc_module.set_mode(n_mode, 0)
         setup_name = self.setup.solution_name
-        args = [
-            "Phase:=", str(int(phase)) + "deg",
-        ]
 
+        args = []
+        
+        if lv is not None:
+           args.append(lv)
+           
+        args.append("Phase:=")
+        args.append(str(int(phase)) + "deg")
+        
         if isinstance(self.setup, HfssDMSetup):
             args.extend(["Freq:=", self.setup.solution_freq])
 
         self.calc_module.ClcEval(setup_name, args)
         return float(self.calc_module.GetTopEntryValue(setup_name, args)[0])
-
 
 class NamedCalcObject(CalcObject):
     def __init__(self, name, setup):
