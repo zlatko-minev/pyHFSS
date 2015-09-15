@@ -1127,11 +1127,11 @@ class CalcObject(COMWrapper):
         self.write_stack()
         #self.calc_module.set_mode(n_mode, 0)
         setup_name = self.setup.solution_name
-
-        args = []
         
         if lv is not None:
-           args.append(lv)
+           args =lv
+        else:
+           args = []
            
         args.append("Phase:=")
         args.append(str(int(phase)) + "deg")
