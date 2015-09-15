@@ -52,11 +52,11 @@ class Bbq(object):
     def get_p_j(self, modes=None, variation=None):
         lv = self.get_lv(variation)            
         if modes is None:
-            modes = [m+1 for m in range(self.nmodes)]
+            modes = range(self.nmodes)
 
         pjs = {}
         for m in modes:
-            self.solutions.set_mode(m, 0)
+            self.solutions.set_mode(m+1, 0)
             fields = self.setup.get_fields()
             P_J = fields.P_J
             pjs['pj_'+str(m)]=P_J.evaluate(lv=lv)
@@ -92,6 +92,7 @@ class Bbq(object):
         variables={}
         for ii in range(np.size(lv)/2):
             variables[lv[2*ii][:-2]]=lv[2*ii+1]
+        self.variables = variables
         return variables
     
     def save_data(self, data, variation):
@@ -99,8 +100,27 @@ class Bbq(object):
         for name, val in data.items():
             group[name] = val
         
+    def get_variables_list(self):
+        variables_list = []
+        for variation in range(self.nvariations):
+            variables_list.append(self.get_variables(variation=variation))
+        return variables_list
+        
+    def get_swept_variables(self):
+        swept_variables = []
+        variables_list = self.get_variables_list()
+        for name in variables_list[0].keys():
+            variables = []
+            for variation in range(self.nvariations):
+                variables.append(variables_list[variation][name])
+            if len(set(variables))>1:
+                swept_variables.append(name)
+        return swept_variables
+            
+        
     def plot_Hparams(self):
-        pass
+        swept_variables = self.get_swept_variables()
+        return
     
     def get_Hparams(self, freqs, pjs, lj):
         Hparams = {}
@@ -145,8 +165,13 @@ class Bbq(object):
             lj = eval(data[LJvariablename][:-2])
             
             # calculate participation ratio for each mode for this variation
-            pjs = self.get_p_j(variation=variation)  
-            #pjs = {'pj_0': 0.00237607887229602,'pj_1': 0.00237607887229602,'pj_2': 0.00237607887229602,'pj_3': 0.00237607887229602}
+            #pjs = self.get_p_j(variation=variation)  
+            pjs = {'pj_1': 0.465358987252528,
+                   'pj_2': 0.0667792007677874,
+                   'pj_3': 0.00380017499629142,
+                   'pj_4': 0.00117714836568518}
+            self.pjs = pjs
+
 
             data.update(pjs)
 
