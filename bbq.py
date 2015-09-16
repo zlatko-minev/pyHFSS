@@ -25,7 +25,7 @@ def nck(n, k):
 
 class Bbq(object):
     """ 
-    This class defines a BBQ object which calculates, saves and plots
+    This class defines a BBQ object which calculates and saves
     Hamiltonian parameters from an HFSS simulation
     """
     
@@ -47,7 +47,7 @@ class Bbq(object):
             os.makedirs(data_dir)
         self.data_dir = data_dir
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
-        self.tree = h5py.File(self.data_filename, 'w')   
+        self.h5file = h5py.File(self.data_filename, 'w')   
 
     def get_p_j(self, modes=None, variation=None):
         lv = self.get_lv(variation)            
@@ -96,31 +96,14 @@ class Bbq(object):
         return variables
     
     def save_data(self, data, variation):
-        group = self.tree.create_group(str(variation))
+        group = self.h5file.create_group(str(variation))
         for name, val in data.items():
             group[name] = val
-        
-    def get_variables_list(self):
-        variables_list = []
-        for variation in range(self.nvariations):
-            variables_list.append(self.get_variables(variation=variation))
-        return variables_list
-        
-    def get_swept_variables(self):
-        swept_variables = []
-        variables_list = self.get_variables_list()
-        for name in variables_list[0].keys():
-            variables = []
-            for variation in range(self.nvariations):
-                variables.append(variables_list[variation][name])
-            if len(set(variables))>1:
-                swept_variables.append(name)
-        return swept_variables
             
-        
-    def plot_Hparams(self):
-        swept_variables = self.get_swept_variables()
-        return
+    def get_variable_variations(variablename):
+        variable_variations = []
+        for variation in self.variations:
+            variable_variations = data_list[variation]
     
     def get_Hparams(self, freqs, pjs, lj):
         Hparams = {}
@@ -156,6 +139,7 @@ class Bbq(object):
         # variables in an optimetric sweep
         if variations is None:
             variations = range(self.nvariations)
+        self.variations = variations
             
         for variation in variations: 
             # get variable values (e.g $pad_length etc.)
@@ -174,6 +158,7 @@ class Bbq(object):
 
 
             data.update(pjs)
+            data['nmodes'] = self.nmodes
 
             # get bare freqs from HFSS
             data.update(self.get_freqs_bare())            
@@ -188,6 +173,62 @@ class Bbq(object):
             # save hdf5 containing data = variables, chis, kerrs, freqs, 
             self.save_data(data, variation)
         
-        self.tree.close()
-        self.plot_Hparams()
+        self.h5file.close()
+        plot_Hparams(data_filename=self.data_filename, variations=self.variations)
         return 
+
+class BbqAnalysis(data_filename, variations = None):
+    self.data_filename = data_filename
+    self.h5data = h5py.File(data_filename, 'r')
+
+    if variations is None:
+        variations = self.h5data.keys()
+    self.variations = variations
+    
+    self.nmodes = h5data[self.variations[0]]['nmodes']        
+        
+    def get_swept_variables(self):
+        swept_variables_names = []
+        swept_variables_values = []
+        for name in self.h5data[self.variations[0]].keys():
+            variables = []
+            for variation in self.variations:
+                variables.append(self.h5data[variation][name])
+            if len(set(variables))>1:
+                swept_variables_names.append(name)
+                swept_variables_values.append(list(set(variables)))
+        return swept_variables_names, swept_variables_values
+        
+    def get_variable_variations(self, variablename):
+        variables = []
+        for variation in self.variations:
+            variables.append(h5data[variation][variablename].value())
+        return variables
+        
+    def plot_Hparams(filename, variations):
+        
+        fig1 = plt.subplots()
+        ax1 = fig1.add_subplot(221)
+        ax2 = fig1.add_subplot(222)
+        ax3 = fig1.add_subplot(223)
+        ax4 = fig1.add_subplot(224)
+        
+        for m in range(self.nmodes):        
+            freq_m = 'freq_'+str(m)
+            Kerr_m = 'alpha_'+str(m)
+            ax1.plot(self.variations, self.get_variable_variations(freq_m), label=freq_m)
+            ax4.plot(self.variations, self.get_variable_variations(Kerr_m)/2/pi, label = Kerr_m+'/2pi')
+            
+            for n in range(m):
+                chi_m_n = 'chi_'+str(m)+'_'+str(n)
+                ax3.plot(self.variations, self.get_variable_variations(chi_m_n)/2/pi, label = chi_m_n+'/2pi')
+        
+        swept_variables_names, swept_variables_values = self.get_swept_variables()     
+        for variable in swept_variables_names:
+            fig1 = plt.subplots()
+            ax1 = fig1.add_subplot(221)
+            ax.scatter()
+        return
+        
+def keys(f):
+    return [key for key in f.keys()]
