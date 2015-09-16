@@ -11,6 +11,7 @@ import h5py
 import time
 import os
 from scipy.constants import *
+import matplotlib.pyplot as plt
 
 root_dir = 'Y:/Data/PumpingCats/HFSS/Analyzed'
 fluxQ = hbar / (2*e)  
@@ -50,7 +51,7 @@ class Bbq(object):
         self.tree = h5py.File(self.data_filename, 'w')   
 
     def get_p_j(self, modes=None, variation=None):
-        lv = self.get_lv(variation)            
+        lv = self.get_lv(variation)
         if modes is None:
             modes = range(self.nmodes)
 
@@ -115,11 +116,21 @@ class Bbq(object):
                 variables.append(variables_list[variation][name])
             if len(set(variables))>1:
                 swept_variables.append(name)
+        self.swept_variables = swept_variables
+        self.nswept_variables = np.size(swept_variables)
         return swept_variables
-            
         
     def plot_Hparams(self):
-        swept_variables = self.get_swept_variables()
+        fig1 = plt.figure(figsize=(12,12))
+
+        ax1 = fig1.add_subplot(221)
+        for variation in range(self.nvariations):
+            ax1.plot(vnafreqs*1e-9, np.angle(data, deg=True))
+            ax1.set_xlabel('VNA freq (GHz)')
+            ax1.set_ylabel('angle(a)')
+#            self.get_swept_variables()
+               
+        
         return
     
     def get_Hparams(self, freqs, pjs, lj):
