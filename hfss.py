@@ -663,10 +663,17 @@ class HfssDesignSolutions(COMWrapper):
         self._solutions = solutions
 
 class HfssEMDesignSolutions(HfssDesignSolutions):
-    def eigenmodes(self):
+    def eigenmodes(self, variation=""):
         fn = tempfile.mktemp()
-        self._solutions.ExportEigenmodes(self.parent.solution_name, "", fn)
-        return numpy.loadtxt(fn, usecols=[1])
+        self._solutions.ExportEigenmodes(self.parent.solution_name, variation, fn)
+        data = numpy.loadtxt(fn, dtype='str')
+        if numpy.size(data[0,:])==6:
+            bws = [float(ii) for ii in data[:,3]]
+        else:
+            bws = None
+            
+        freqs = [float(ii) for ii in data[:,1]]
+        return freqs, bws
 
     def set_mode(self, n, phase):
         n_modes = int(self.parent.n_modes)
