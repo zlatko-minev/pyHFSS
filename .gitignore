@@ -54,3 +54,6 @@ docs/_build/
 
 # PyCharm
 .idea
+
+# Subdirectories
+/Chris_scripts

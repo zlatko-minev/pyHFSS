@@ -99,7 +99,7 @@ class Bbq(object):
 
         pjs = {}
         for ii, m in enumerate(modes):
-            print 'Calculating p_j for mode ' + str(m) + ' (' + str(ii) + '/' + str(np.size(modes)) + ')'
+            print 'Calculating p_j for mode ' + str(m) + ' (' + str(ii) + '/' + str(np.size(modes)-1) + ')'
             self.solutions.set_mode(m+1, 0)
             fields = self.setup.get_fields()
             P_J = fields.P_J
@@ -194,7 +194,7 @@ class Bbq(object):
         self.variations = variations
 
         for ii, variation in enumerate(variations):
-            print 'variation : ' + variation + ' (' + str(ii) + ' / ' + str(len(self.variations)) + ')'
+            print 'variation : ' + variation + ' (' + str(ii) + ' / ' + str(len(self.variations)-1) + ')'
             
             if variation in self.h5file.keys() and self.append_analysis:
                 print 'variation previously analyzed ...'
@@ -286,8 +286,45 @@ class BbqAnalysis(object):
                     return float(variable_value[:-n]), variable_value[len(variable_value)-n:]
                 except:
                     n+=1
-                    
-    def plot_Hparams(self, variable_name = None):
+    
+    def print_Hparams(self, variation=None, modes=None):
+        if modes==None:
+            modes = range(self.nmodes)
+        else:
+            pass
+        if variation == None:
+            variation = self.variations[-1]
+        else:
+            pass
+        swept_variables_names, swept_variables_values = self.get_swept_variables()
+
+        for vname in swept_variables_names:
+            print vname + ' = ' + self.h5data[variation][vname].value
+        for ii, m in enumerate(modes):        
+            freq_m = 'freq_'+str(m)
+            Kerr_m = 'alpha_'+str(m)
+            Q_m = 'Q_'+str(m)
+            if freq_m not in self.h5data[variation].keys():
+                freq_m = 'freq_bare_'+str(m)
+            else:
+                pass
+            if Kerr_m in self.h5data[variation].keys():
+                print Kerr_m + ' = ' +str(self.h5data[variation][Kerr_m].value/2/pi/1e6) + ' MHz' 
+            else:
+                pass
+ 
+            print freq_m +' = ' + str(self.h5data[variation][freq_m].value/1e9) + ' GHz'   
+            if Q_m in self.h5data[variation].keys():             
+                print Q_m  + ' = ' + str(self.h5data[variation][Q_m].value)
+            else:
+                pass
+            
+            for n in modes[0:ii]:
+                chi_m_n = 'chi_'+str(m)+'_'+str(n)
+                if chi_m_n in self.h5data[variation].keys():
+                    print chi_m_n + ' = ' + str(self.h5data[variation][chi_m_n].value/2/pi/1e6) + ' MHz'
+        
+    def plot_Hparams(self, variable_name=None, modes=None):
         fig, ax = plt.subplots(2,2, figsize=(24,10))
 
         if variable_name == None:
@@ -296,8 +333,13 @@ class BbqAnalysis(object):
             xaxis = []
             for variation in self.variations:
                 xaxis.append(self.get_float_units(variable_name, variation)[0])
+
+        if modes==None:
+            modes = range(self.nmodes)
+        else:
+            pass
     
-        for m in range(self.nmodes):        
+        for ii, m in enumerate(modes):        
             freq_m = 'freq_'+str(m)
             Kerr_m = 'alpha_'+str(m)
             Q_m = 'Q_'+str(m)
@@ -316,7 +358,7 @@ class BbqAnalysis(object):
             else:
                 pass
             
-            for n in range(m):
+            for n in modes[0:ii]:
                 chi_m_n = 'chi_'+str(m)+'_'+str(n)
                 if chi_m_n in self.h5data[self.variations[0]].keys():
                     ax[1][0].plot(xaxis, self.get_variable_variations(chi_m_n)/2/pi/1e6, 'o', label=str(m)+','+str(n))
