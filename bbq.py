@@ -18,7 +18,11 @@ import shutil
 import time
 
 root_dir = 'Y:/Data/PumpingCats/HFSS/Analyzed'
-fluxQ = hbar / (2*e)  
+fluxQ = hbar / (2*e)
+gseam = 1.0e3 # per Ohm meter: seam conductance
+th = 3e-9 # dirt thickness on dielectric
+tan_delta_sapp = 1e-6 # tan(delta) for bulk surface
+tan_delta_surf = 1e-3 # tan(delta) for surfaces   
 
 def fact(n):
     if n <= 1:
@@ -38,6 +42,7 @@ class Bbq(object):
         self.project = project
         self.design = design
         self.setup = design.get_setup()
+        self.fields = self.setup.get_fields()
         self.nmodes = int(self.setup.n_modes)
         self.listvariations = design._solutions.ListVariations(str(self.setup.solution_name))
         self.nominalvariation = design.get_nominal_variation()
@@ -101,8 +106,8 @@ class Bbq(object):
         for ii, m in enumerate(modes):
             print 'Calculating p_j for mode ' + str(m) + ' (' + str(ii) + '/' + str(np.size(modes)-1) + ')'
             self.solutions.set_mode(m+1, 0)
-            fields = self.setup.get_fields()
-            P_J = fields.P_J
+            self.fields = self.setup.get_fields()
+            P_J = self.fields.P_J
             pjs['pj_'+str(m)] = P_J.evaluate(lv=lv)
         self.pjs = pjs
         if self.verbose: print pjs
@@ -111,7 +116,7 @@ class Bbq(object):
     def get_freqs_bare(self, variation):
         freqs_bare_vals = []
         freqs_bare_dict = {}
-        freqs, bws = self.solutions.eigenmodes(str(self.listvariations[eval(variation)]))
+        freqs, bws = self.solutions.eigenmodes(str(self.get_lv(variation)))
         for m in range(self.nmodes):
             freqs_bare_dict['freq_bare_'+str(m)] = 1e9*freqs[m]
             freqs_bare_vals.append(1e9*freqs[m])
@@ -152,6 +157,30 @@ class Bbq(object):
         for name, val in data.items():
             group[name] = val
     
+    
+    def get_Qseam(self, seam_name, modes=None, variation=None):
+        # ref: http://arxiv.org/pdf/1509.01119.pdf
+        lv = self.get_lv(variation)
+        if modes is None:
+            modes = range(self.nmodes)
+
+        freqs, bws = self.solutions.eigenmodes(str(lv))
+        Qseams = {}
+        for ii, m in enumerate(modes):
+            print 'Calculating Qseam_'+ seam_name +' for mode ' + str(m) + ' (' + str(ii) + '/' + str(np.size(modes)-1) + ')'
+            self.solutions.set_mode(m+1, 0)
+            self.fields = self.setup.get_fields()
+            MagH2 = mu*(self.fields.Mag_H**2).integrate_vol('AllObjects').evaluate(lv=lv,phase=90)
+            int_j_2 = (self.fields.Vector_Jsurf.norm_2()).integrate_line(seam_name)
+            int_j_2_val = int_j_2.evaluate(lv=lv,phase=90)
+            omega = 2*np.pi*freqs[m]*1e9
+            yseam = int_j_2_val/MagH2/omega
+            Qseam = gseam/yseam
+            Qseams['Qseam_'+seam_name+'_'+str(m)] = Qseam
+        self.Qseams = Qseams
+        if self.verbose: print Qseams
+        return Qseams
+    
     def get_Hparams(self, freqs, pjs, lj):
         Hparams = {}
         fzpfs = []
@@ -176,7 +205,7 @@ class Bbq(object):
 
         return Hparams
         
-    def do_bbq(self, LJvariablename, variations=None, plot_fig=True):
+    def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False):
         
         if self.latest_h5_path is not None and self.append_analysis:
             shutil.copyfile(self.latest_h5_path, self.data_filename)
@@ -205,6 +234,13 @@ class Bbq(object):
             #return
             # get variable values (e.g $pad_length etc.)
             data.update(self.get_variables(variation=variation))
+
+            data['nmodes'] = self.nmodes
+
+            # get bare freqs from HFSS
+            freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
+            data.update(freqs_bare_dict)
+
             
             # get LJ value
             if self.calculate_H:
@@ -215,16 +251,29 @@ class Bbq(object):
                 pjs = self.get_p_j(variation=variation)
     
                 data.update(pjs)
-            data['nmodes'] = self.nmodes
-
-            # get bare freqs from HFSS
-            freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
-            data.update(freqs_bare_dict)
 
             # get Kerrs and chis
             if self.calculate_H:
                 data.update(self.get_Hparams(freqs_bare_vals, self.pjs.values()[::-1], lj))
+                print '------ H params -------'
+                
+            # get Q seam
+            if seams is not None:
+                for seam in seams:
+                     Qseams = self.get_Qseam(seam, modes=None, variation=variation)
+                     data.update(Qseams)
             
+            # get Q dielectric
+            if dielectrics is not None:
+                for dielectric in dielectrics:
+                     Qdielectric = self.get_Qdielectric(dielectric, modes=None, variation=variation)
+                     data.update(Qdielectric)
+            
+            # get Q surface
+            if surface is True:
+                Qsurface = self.get_Qsurface(modes=None, variation=variation)
+                data.update(Qsurface)
+                     
             self.data = data
             data_list.append(data)
             self.data_list = data_list
@@ -236,6 +285,7 @@ class Bbq(object):
         self.bbq_analysis = BbqAnalysis(self.data_filename, variations=self.variations)
         if plot_fig:
             self.bbq_analysis.plot_Hparams()
+            self.bbq_analysis.print_Hparams()
         return
 
 class BbqAnalysis(object):

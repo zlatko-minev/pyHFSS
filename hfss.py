@@ -1100,6 +1100,9 @@ class CalcObject(COMWrapper):
     def scalar_z(self):
         return self._unary_op("ScalarZ")
 
+    def norm_2(self):
+        return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
+
     def real(self):
         return self._unary_op("Real")
 
