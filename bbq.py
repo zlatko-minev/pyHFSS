@@ -19,10 +19,20 @@ import time
 
 root_dir = 'Y:/Data/PumpingCats/HFSS/Analyzed'
 fluxQ = hbar / (2*e)
+
+# seams:
+# ref: http://arxiv.org/pdf/1509.01119.pdf
 gseam = 1.0e3 # per Ohm meter: seam conductance
+
+# surfaces:
+# ref: http://arxiv.org/pdf/1509.01854.pdf
 th = 3e-9 # dirt thickness on dielectric
+eps_r = 10 # dielectric constant of dirt
+tan_delta_surf = 1e-3 # tan(delta) for surfaces 
+
+# bulk:
+# ref: http://arxiv.org/pdf/1509.01854.pdf
 tan_delta_sapp = 1e-6 # tan(delta) for bulk surface
-tan_delta_surf = 1e-3 # tan(delta) for surfaces   
 
 def fact(n):
     if n <= 1:
@@ -97,7 +107,7 @@ class Bbq(object):
         self.data_dir = data_dir
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
 
-    def get_p_j(self, modes=None, variation=None):
+    def calc_p_j(self, modes=None, variation=None):
         lv = self.get_lv(variation)
         if modes is None:
             modes = range(self.nmodes)
@@ -112,6 +122,10 @@ class Bbq(object):
         self.pjs = pjs
         if self.verbose: print pjs
         return pjs
+
+    def get_p_j(self, mode):
+        pj = {}
+        pj['pj_'+str(mode)] = (U_E-U_M)/(2*U_E) 
     
     def get_freqs_bare(self, variation):
         freqs_bare_vals = []
@@ -158,28 +172,34 @@ class Bbq(object):
             group[name] = val
     
     
-    def get_Qseam(self, seam_name, modes=None, variation=None):
+    def get_Qseam(self, seam, mode):
         # ref: http://arxiv.org/pdf/1509.01119.pdf
-        lv = self.get_lv(variation)
-        if modes is None:
-            modes = range(self.nmodes)
+        Qseam = {}
+        print 'Calculating Qseam_'+ seam +' for mode ' + str(mode) + ' (' + str(ii) + '/' + str(self.nmodes-1) + ')'
+        int_j_2 = (self.fields.Vector_Jsurf.norm_2()).integrate_line(seam) # overestimating the loss by taking norm2 of j, rather than jperp**2
+        int_j_2_val = int_j_2.evaluate(lv=self.lv,phase=90)
+        yseam = int_j_2_val/self.U_H/self.omega
+        Qseam['Qseam_'+seam+'_'+str(mode)] = gseam/yseam
+        return Qseam
 
-        freqs, bws = self.solutions.eigenmodes(str(lv))
-        Qseams = {}
-        for ii, m in enumerate(modes):
-            print 'Calculating Qseam_'+ seam_name +' for mode ' + str(m) + ' (' + str(ii) + '/' + str(np.size(modes)-1) + ')'
-            self.solutions.set_mode(m+1, 0)
-            self.fields = self.setup.get_fields()
-            MagH2 = mu*(self.fields.Mag_H**2).integrate_vol('AllObjects').evaluate(lv=lv,phase=90)
-            int_j_2 = (self.fields.Vector_Jsurf.norm_2()).integrate_line(seam_name)
-            int_j_2_val = int_j_2.evaluate(lv=lv,phase=90)
-            omega = 2*np.pi*freqs[m]*1e9
-            yseam = int_j_2_val/MagH2/omega
-            Qseam = gseam/yseam
-            Qseams['Qseam_'+seam_name+'_'+str(m)] = Qseam
-        self.Qseams = Qseams
-        if self.verbose: print Qseams
-        return Qseams
+    def get_Qdielectric(self, dielectric, mode):
+        Qdielectric = {}
+        print 'Calculating Qdielectric_'+ dielectric +' for mode ' + str(mode) + ' (' + str(ii) + '/' + str(self.nmodes-1) + ')'
+        U_dielectric = (epsi*(self.fields.Mag_E**2)).integrate_vol(dielectric).evaluate(lv=lv,phase=0)
+        p_dielectric = U_dielectric/U_E
+        Qdielectric['Qdielectric_'+dielectric+'_'+str(mode)] = 1/(p_dielectric*tan_delta_sapp)
+
+        return Qdielectric
+
+    def get_Qsurf(self, mode):
+        # ref: http://arxiv.org/pdf/1509.01854.pdf
+        Qsurf = {}
+        print 'Calculating Qsurface for mode ' + str(mode) + ' (' + str(ii) + '/' + str(self.nmodes-1) + ')'
+        U_surf = th*(epsi_0*eps_r*(self.fields.Mag_E**2)).integrate_surf('AllObjects').evaluate(lv=lv,phase=0)
+        p_surf = U_surf/U_E
+        Qsurf['Qsurf_'+str(mode)] = 1/(p_surf*tan_delta_surf)
+
+        return Qdielectric
     
     def get_Hparams(self, freqs, pjs, lj):
         Hparams = {}
@@ -205,13 +225,14 @@ class Bbq(object):
 
         return Hparams
         
-    def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False):
+    def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None):
         
         if self.latest_h5_path is not None and self.append_analysis:
             shutil.copyfile(self.latest_h5_path, self.data_filename)
         
         self.h5file = h5py.File(self.data_filename)
-        
+        calc_fields = (seams is not None) or (dielectrics is not None) or surface or self.calculate_H
+
         # list of data dictionaries. One dict per optimetric sweep.        
         data_list = []
         data = {}
@@ -222,9 +243,14 @@ class Bbq(object):
             variations = [str(i) for i in range(self.nvariations)]
         self.variations = variations
 
+        if modes is None:
+            modes = range(self.nmodes)
+        self.modes = modes
+
         for ii, variation in enumerate(variations):
             print 'variation : ' + variation + ' (' + str(ii) + ' / ' + str(len(self.variations)-1) + ')'
-            
+            self.lv = self.get_lv(variation)
+
             if variation in self.h5file.keys() and self.append_analysis:
                 print 'variation previously analyzed ...'
                 continue
@@ -241,38 +267,52 @@ class Bbq(object):
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
             data.update(freqs_bare_dict)
 
-            
-            # get LJ value
-            if self.calculate_H:
-                lj = eval(data['_'+LJvariablename][:-2])
-                lj *= 1e-9
-                
-                #calculate participation ratio for each mode for this variation
-                pjs = self.get_p_j(variation=variation)
-    
-                data.update(pjs)
+            if calc_fields:
+                pjs={}
+                freqs, bws = self.solutions.eigenmodes(str(self.lv))
 
-            # get Kerrs and chis
-            if self.calculate_H:
-                data.update(self.get_Hparams(freqs_bare_vals, self.pjs.values()[::-1], lj))
-                print '------ H params -------'
-                
-            # get Q seam
-            if seams is not None:
-                for seam in seams:
-                     Qseams = self.get_Qseam(seam, modes=None, variation=variation)
-                     data.update(Qseams)
-            
-            # get Q dielectric
-            if dielectrics is not None:
-                for dielectric in dielectrics:
-                     Qdielectric = self.get_Qdielectric(dielectric, modes=None, variation=variation)
-                     data.update(Qdielectric)
-            
-            # get Q surface
-            if surface is True:
-                Qsurface = self.get_Qsurface(modes=None, variation=variation)
-                data.update(Qsurface)
+                for mode in modes:
+                    print 'Taking mode number ' + str(mode) ' / ' + str(self.nmodes)
+                    self.solutions.set_mode(mode+1, 0)
+                    self.fields = self.setup.get_fields()
+                    self.omega = 2*np.pi*freqs[m]*1e9
+
+                    print 'Caluclating U_H ...'
+                    self.U_H =   (mu*(self.fields.Mag_H**2)).integrate_vol('AllObjects').evaluate(lv=lv,phase=90)
+
+                    print 'Calculating U_E ...'
+                    self.U_E = (epsi*(self.fields.Mag_E**2)).integrate_vol('AllObjects').evaluate(lv=lv,phase=0)
+
+                    if self.calculate_H:
+                        # get LJ value
+                        lj = eval(data['_'+LJvariablename][:-2])
+                        lj *= 1e-9
+                        
+                        #calculate participation ratio for each mode for this variation
+                        pj = self.get_p_j(mode)
+                        pjs.update(pj)
+                        data.update(pj)
+                        
+                    # get Q seam
+                    if seams is not None:
+                        for seam in seams:
+                             Qseam = self.get_Qseam(seam,mode)
+                             data.update(Qseam)
+                    
+                    # get Q dielectric
+                    if dielectrics is not None:
+                        for dielectric in dielectrics:
+                             Qdielectric = self.get_Qdielectric(dielectric, mode)
+                             data.update(Qdielectric)
+                    
+                    # get Q surface
+                    if surface is True:
+                        Qsurface = self.get_Qsurface(mode)
+                        data.update(Qsurface)
+
+                # get Kerrs and chis
+                if self.calculate_H:
+                    data.update(self.get_Hparams(freqs_bare_vals, self.pjs.values()[::-1], lj))
                      
             self.data = data
             data_list.append(data)
