@@ -663,17 +663,18 @@ class HfssDesignSolutions(COMWrapper):
         self._solutions = solutions
 
 class HfssEMDesignSolutions(HfssDesignSolutions):
-    def eigenmodes(self, variation=""):
+    def eigenmodes(self, lv=""):
         fn = tempfile.mktemp()
-        self._solutions.ExportEigenmodes(self.parent.solution_name, variation, fn)
+        self._solutions.ExportEigenmodes(self.parent.solution_name, lv, fn)
         data = numpy.loadtxt(fn, dtype='str')
         if numpy.size(data[0,:])==6:
-            bws = [float(ii) for ii in data[:,3]]
+            kappa_over_2pis = [2*float(ii) for ii in data[:,3]] # eigvalue=(omega-i*kappa/2)/2pi
+                                                    # so kappa/2pi = 2*Im(eigvalue)
         else:
-            bws = None
+            kappa_over_2pis = None
             
         freqs = [float(ii) for ii in data[:,1]]
-        return freqs, bws
+        return freqs, kappa_over_2pis
 
     def set_mode(self, n, phase):
         n_modes = int(self.parent.n_modes)
@@ -1084,12 +1085,18 @@ class CalcObject(COMWrapper):
 
     def __pow__(self, other):
         return self._bin_op(other, "Pow")
+        
+    def dot(self, other):
+        return self._bin_op(other,"Dot")
 
     def __neg__(self):
         return self._unary_op("Neg")
 
     def __abs__(self):
         return self._unary_op("Abs")
+        
+    def conj(self):
+        return self._unary_op("Conj") # make this right
 
     def scalar_x(self):
         return self._unary_op("ScalarX")
@@ -1112,6 +1119,10 @@ class CalcObject(COMWrapper):
     def _integrate(self, name, type):
         stack = self.stack + [(type, name), ("CalcOp", "Integrate")]
         return CalcObject(stack, self.setup)
+      
+    def getQty(self, name):
+        stack = self.stack + [("EnterQty", name)]
+        return CalcObject(stack, self.setup)
 
     def integrate_line(self, name):
         return self._integrate(name, "EnterLine")
@@ -1121,10 +1132,21 @@ class CalcObject(COMWrapper):
 
     def integrate_vol(self, name="AllObjects"):
         return self._integrate(name, "EnterVol")
+        
+    def times_eps(self):
+        stack = self.stack + [("ClcMaterial", ("Permittivity (epsi)", "mult"))]
+        return CalcObject(stack, self.setup)
+
+    def times_mu(self):
+        stack = self.stack + [("ClcMaterial", ("Permeability (mu)", "mult"))]
+        return CalcObject(stack, self.setup)
 
     def write_stack(self):
         for fn, arg in self.stack:
-            getattr(self.calc_module, fn)(arg)
+            if numpy.size(arg)>1:
+                getattr(self.calc_module, fn)(*arg)
+            else:
+                getattr(self.calc_module, fn)(arg)
 
     def save_as(self, name):
         """if the object already exists, try clearing your
@@ -1135,6 +1157,9 @@ class CalcObject(COMWrapper):
 
     def evaluate(self, phase=0, lv=None):#, n_mode=1):
         self.write_stack()
+        print '---------------------'
+        print 'writing to stack: OK'
+        print '-----------------'
         #self.calc_module.set_mode(n_mode, 0)
         setup_name = self.setup.solution_name
         

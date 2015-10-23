@@ -125,17 +125,21 @@ class Bbq(object):
 
     def get_p_j(self, mode):
         pj = {}
-        pj['pj_'+str(mode)] = (U_E-U_M)/(2*U_E) 
+        pj_val = (self.U_E-self.U_H)/(2*self.U_E)
+        pj['pj_'+str(mode)] = np.abs(pj_val)
+        print 'p_j_' + str(mode) + ' = ' + str(pj_val)        
+        return pj
     
     def get_freqs_bare(self, variation):
+        #str(self.get_lv(variation))
         freqs_bare_vals = []
         freqs_bare_dict = {}
-        freqs, bws = self.solutions.eigenmodes(str(self.get_lv(variation)))
+        freqs, kappa_over_2pis = self.solutions.eigenmodes(self.get_lv_EM(variation))
         for m in range(self.nmodes):
             freqs_bare_dict['freq_bare_'+str(m)] = 1e9*freqs[m]
             freqs_bare_vals.append(1e9*freqs[m])
-            if bws is not None:
-                freqs_bare_dict['Q_'+str(m)] = freqs[m]/bws[m]
+            if kappa_over_2pis is not None:
+                freqs_bare_dict['Q_'+str(m)] = freqs[m]/kappa_over_2pis[m]
         self.freqs_bare = freqs_bare_dict
         if self.verbose: print freqs_bare_dict
         return freqs_bare_dict, freqs_bare_vals
@@ -150,6 +154,23 @@ class Bbq(object):
             lv = self.parse_listvariations(lv)
         return lv
     
+    def get_lv_EM(self, variation):
+        if variation is None:
+            lv = self.nominalvariation
+            #lv = self.parse_listvariations_EM(lv)
+        else:
+            lv = self.listvariations[eval(variation)]
+            #lv = self.parse_listvariations_EM(lv)
+        return str(lv)
+    
+    def parse_listvariations_EM(self,lv):
+        lv = str(lv)
+        lv = lv.replace("=",":=,")
+        lv = lv.replace(' ',',')
+        lv = lv.replace("'","")
+        lv = lv.split(",")
+        return lv
+        
     def parse_listvariations(self,lv):
         lv = str(lv)
         lv = lv.replace("=",":=,")
@@ -195,7 +216,7 @@ class Bbq(object):
         # ref: http://arxiv.org/pdf/1509.01854.pdf
         Qsurf = {}
         print 'Calculating Qsurface for mode ' + str(mode) + ' (' + str(ii) + '/' + str(self.nmodes-1) + ')'
-        U_surf = th*(epsi_0*eps_r*(self.fields.Mag_E**2)).integrate_surf('AllObjects').evaluate(lv=lv,phase=0)
+        U_surf = th*epsilon_0*eps_r*((self.fields.Mag_E**2).integrate_surf('AllObjects')).evaluate(lv=lv,phase=0)
         p_surf = U_surf/U_E
         Qsurf['Qsurf_'+str(mode)] = 1/(p_surf*tan_delta_surf)
 
@@ -224,6 +245,26 @@ class Bbq(object):
                 Hparams['chi_'+str(m)+'_'+str(n)] = chi_mn
 
         return Hparams
+       
+    def calc_U_E(self):
+        calcobject=CalcObject([],self.setup)
+        vecE=calcobject.getQty("E")
+        A=vecE.times_eps()
+        B=vecE.conj()
+        A=A.dot(B)
+        A=A.real()
+        A=A.integrate_vol('AllObjects')
+        return A.evaluate()
+        
+    def calc_U_H(self):
+        calcobject=CalcObject([],self.setup)
+        vecH=calcobject.getQty("H")
+        A=vecH.times_mu()
+        B=vecH.conj()
+        A=A.dot(B)
+        A=A.real()
+        A=A.integrate_vol('AllObjects')
+        return A.evaluate(lv=self.lv)
         
     def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None):
         
@@ -267,21 +308,23 @@ class Bbq(object):
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
             data.update(freqs_bare_dict)
 
+            print '---------------------- calc_fields ---------------'
+            print str(calc_fields)
+            print '--------------------'
             if calc_fields:
-                pjs={}
-                freqs, bws = self.solutions.eigenmodes(str(self.lv))
+                self.pjs={}
 
                 for mode in modes:
-                    print 'Taking mode number ' + str(mode) ' / ' + str(self.nmodes)
+                    print 'Taking mode number ' + str(mode) + ' / ' + str(self.nmodes-1)
                     self.solutions.set_mode(mode+1, 0)
                     self.fields = self.setup.get_fields()
-                    self.omega = 2*np.pi*freqs[m]*1e9
+                    self.omega = 2*np.pi*freqs_bare_vals[mode]*1e9
 
                     print 'Caluclating U_H ...'
-                    self.U_H =   (mu*(self.fields.Mag_H**2)).integrate_vol('AllObjects').evaluate(lv=lv,phase=90)
+                    self.U_H = self.calc_U_H()
 
                     print 'Calculating U_E ...'
-                    self.U_E = (epsi*(self.fields.Mag_E**2)).integrate_vol('AllObjects').evaluate(lv=lv,phase=0)
+                    self.U_E = self.calc_U_E()
 
                     if self.calculate_H:
                         # get LJ value
@@ -290,7 +333,7 @@ class Bbq(object):
                         
                         #calculate participation ratio for each mode for this variation
                         pj = self.get_p_j(mode)
-                        pjs.update(pj)
+                        self.pjs.update(pj)
                         data.update(pj)
                         
                     # get Q seam
