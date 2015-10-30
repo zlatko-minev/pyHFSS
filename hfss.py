@@ -1164,7 +1164,7 @@ class CalcObject(COMWrapper):
         setup_name = self.setup.solution_name
         
         if lv is not None:
-           args =lv
+           args = lv
         else:
            args = []
            
