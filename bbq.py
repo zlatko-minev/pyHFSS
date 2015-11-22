@@ -94,6 +94,10 @@ class Bbq(object):
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
 
     def calc_p_j(self, modes=None, variation=None):
+        '''
+        Calculates the p_j for all the modes. 
+        Requires a calculator expression called P_J.
+        '''
         lv = self.get_lv(variation)
         if modes is None:
             modes = range(self.nmodes)
@@ -322,7 +326,7 @@ class Bbq(object):
                     print 'Taking mode number ' + str(mode) + ' / ' + str(self.nmodes-1)
                     self.solutions.set_mode(mode+1, 0)
                     self.fields = self.setup.get_fields()
-                    self.omega = 2*np.pi*freqs_bare_vals[mode]*1e9
+                    self.omega = 2*np.pi*freqs_bare_vals[mode]*1e9 # ZKM: Possible error, i dont have 1e9
 
                     print 'Caluclating U_H ...'
                     self.U_H = self.calc_U_H(variation)

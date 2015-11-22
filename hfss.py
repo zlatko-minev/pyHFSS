@@ -1190,6 +1190,10 @@ class ConstantCalcObject(CalcObject):
         super(ConstantCalcObject, self).__init__(stack, setup)
 
 def get_active_project():
+    ''' If you see the error:
+        "The requested operation requires elevation."
+        then you need to run your python as an admin.
+    '''
     app = HfssApp()
     desktop = app.get_app_desktop()
     return desktop.get_active_project()
