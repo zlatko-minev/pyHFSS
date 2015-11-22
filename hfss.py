@@ -1194,6 +1194,14 @@ def get_active_project():
         "The requested operation requires elevation."
         then you need to run your python as an admin.
     '''
+    import ctypes, os
+    try:
+        is_admin = os.getuid() == 0
+    except AttributeError:
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+    if not is_admin:
+        print '\033[93m WARNING: you are not runnning as an admin! You need to run as an admin. You will probably get an error next. \033[0m'
+    
     app = HfssApp()
     desktop = app.get_app_desktop()
     return desktop.get_active_project()
