@@ -953,7 +953,7 @@ class ModelEntity(str, HfssPropertyObject):
         :type val: str
         :type modeler: HfssModeler
         """
-        super(ModelEntity, self).__init__(val)
+        super(ModelEntity, self).__init__()#val) #Comment out keyword to match arguments
         self.modeler = modeler
         self.prop_server = self + ":" + self.model_command + ":1"
 
