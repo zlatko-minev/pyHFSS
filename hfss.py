@@ -667,7 +667,11 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
         fn = tempfile.mktemp()
         self._solutions.ExportEigenmodes(self.parent.solution_name, lv, fn)
         data = numpy.loadtxt(fn, dtype='str')
-        if numpy.size(data[0,:])==6:
+        if numpy.size(numpy.shape(data)) == 1: # getting around the very annoying fact that 
+            data = numpy.array([data])         # in Python a 1D array does not have shape (N,1)
+        else:                                  # but rather (N,) ....
+            pass
+        if numpy.size(data[0,:])==6: # checking if values for Q were saved
             kappa_over_2pis = [2*float(ii) for ii in data[:,3]] # eigvalue=(omega-i*kappa/2)/2pi
                                                     # so kappa/2pi = 2*Im(eigvalue)
         else:
@@ -1095,6 +1099,9 @@ class CalcObject(COMWrapper):
     def __abs__(self):
         return self._unary_op("Abs")
         
+    def __mag__(self):
+        return self._unary_op("Mag")
+        
     def conj(self):
         return self._unary_op("Conj") # make this right
 
@@ -1108,7 +1115,8 @@ class CalcObject(COMWrapper):
         return self._unary_op("ScalarZ")
 
     def norm_2(self):
-        return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
+        return (self.__mag__()).__pow__(2)        
+        #return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
 
     def real(self):
         return self._unary_op("Real")

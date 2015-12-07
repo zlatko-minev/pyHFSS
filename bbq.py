@@ -92,6 +92,7 @@ class Bbq(object):
             os.makedirs(data_dir)
         self.data_dir = data_dir
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
+        print "Data will be saved in " + str(data_dir)
 
     def calc_p_j(self, modes=None, variation=None):
         lv = self.get_lv(variation)
@@ -184,10 +185,12 @@ class Bbq(object):
         lv = self.get_lv(variation)
         Qseam = {}
         print 'Calculating Qseam_'+ seam +' for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
-        int_j_2 = (self.fields.Vector_Jsurf.norm_2()).integrate_line(seam) # overestimating the loss by taking norm2 of j, rather than jperp**2
-        int_j_2_val = int_j_2.evaluate(lv=lv,phase=90)
+        j_2_norm = self.fields.Vector_Jsurf.norm_2() # overestimating the loss by taking norm2 of j, rather than jperp**2
+        int_j_2 = j_2_norm.integrate_line(seam)
+        int_j_2_val = int_j_2.evaluate(lv=lv, phase=90)
         yseam = int_j_2_val/self.U_H/self.omega
         Qseam['Qseam_'+seam+'_'+str(mode)] = gseam/yseam
+        print 'Qseam_' + seam + '_' + str(mode) + str(' = ') + str(gseam/yseam)
         return Qseam
 
     def get_Qdielectric(self, dielectric, mode, variation):
@@ -270,7 +273,8 @@ class Bbq(object):
         return A.evaluate(lv=lv, phase=0)
         
     def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None):
-        
+        # seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
+        # variations = ['0', '1']
         if self.latest_h5_path is not None and self.append_analysis:
             shutil.copyfile(self.latest_h5_path, self.data_filename)
         
@@ -280,6 +284,14 @@ class Bbq(object):
         # list of data dictionaries. One dict per optimetric sweep.
         data_list = []
         data = {}
+        
+        if seams is not None:
+            self.seams = seams
+            data['seams'] = seams
+            
+        if dielectrics is not None:
+            self.dielectrics = dielectrics
+            data['dielectrics'] = dielectrics
         
         # A variation is a combination of project/design 
         # variables in an optimetric sweep
@@ -480,6 +492,8 @@ class BbqAnalysis(object):
             freq_m = 'freq_'+str(m)
             Kerr_m = 'alpha_'+str(m)
             Q_m = 'Q_'+str(m)
+            Qsurf_m = 'Qsurf_'+str(m)
+            
             if freq_m not in self.h5data[self.variations[0]].keys():
                 freq_m = 'freq_bare_'+str(m)
             else:
@@ -489,11 +503,33 @@ class BbqAnalysis(object):
             else:
                 pass
     
-            ax[0][0].plot(xaxis, self.get_variable_variations(freq_m)/1e9, 'o', label=str(m))            
+            ax[0][0].plot(xaxis, self.get_variable_variations(freq_m)/1e9, 'o', label=str(m))     
+            
             if Q_m in self.h5data[self.variations[0]].keys():             
-                ax[1][1].plot(xaxis, self.get_variable_variations(Q_m), 'o', label = str(m))
+                ax[1][1].plot(xaxis, self.get_variable_variations(Q_m), 'o', label = Q_m)
             else:
                 pass
+            
+            if Qsurf_m in self.h5data[self.variations[0]].keys():             
+                ax[1][1].plot(xaxis, self.get_variable_variations(Qsurf_m), 'o', label = Qsurf_m)
+            else:
+                pass            
+            
+            if 'seams' in self.h5data[self.variations[0]].keys():
+                for seam in self.h5data[self.variations[0]]['seams'].value:
+                    Qseam_m = 'Qseam_'+seam+'_'+str(m)
+                    if Qseam_m in self.h5data[self.variations[0]].keys():             
+                        ax[1][1].plot(xaxis, self.get_variable_variations(Qseam_m), 'o', label = Qseam_m)
+                    else:
+                        pass
+                    
+            if 'dielectrics' in self.h5data[self.variations[0]].keys():
+                for dielectric in self.h5data[self.variations[0]]['dielectrics'].value:
+                    Qdielectric_m = 'Qdielectric_'+dielectric+'_'+str(m)
+                    if Qdielectric_m in self.h5data[self.variations[0]].keys():             
+                        ax[1][1].plot(xaxis, self.get_variable_variations(Qdielectric_m), 'o', label = Qdielectric_m)
+                    else:
+                        pass            
             
             for n in modes[0:ii]:
                 chi_m_n = 'chi_'+str(m)+'_'+str(n)
