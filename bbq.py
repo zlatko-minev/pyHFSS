@@ -128,6 +128,7 @@ class Bbq(object):
             if kappa_over_2pis is not None:
                 freqs_bare_dict['Q_'+str(m)] = freqs[m]/kappa_over_2pis[m]
         self.freqs_bare = freqs_bare_dict
+        self.freqs_bare_vals = freqs_bare_vals
         if self.verbose: print freqs_bare_dict
         return freqs_bare_dict, freqs_bare_vals
         
@@ -192,6 +193,39 @@ class Bbq(object):
         Qseam['Qseam_'+seam+'_'+str(mode)] = gseam/yseam
         print 'Qseam_' + seam + '_' + str(mode) + str(' = ') + str(gseam/yseam)
         return Qseam
+
+    def get_Qseam_sweep(self, seam, mode, variation, variable, values, unit, pltresult=True):
+        # values = ['5mm','6mm','7mm']
+        # ref: http://arxiv.org/pdf/1509.01119.pdf
+        
+        self.solutions.set_mode(mode+1, 0)
+        self.fields = self.setup.get_fields()
+        freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
+        self.omega = 2*np.pi*freqs_bare_vals[mode]
+        print variation
+        print type(variation)
+        print eval(variation)
+        self.U_H = self.calc_U_H(variation)
+        lv = self.get_lv(variation)
+        Qseamsweep = []
+        print 'Calculating Qseam_'+ seam +' for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
+        for value in values:
+            self.design.set_variable(variable, str(value)+unit)
+            
+            j_2_norm = self.fields.Vector_Jsurf.norm_2() # overestimating the loss by taking norm2 of j, rather than jperp**2
+            int_j_2 = j_2_norm.integrate_line(seam)
+            int_j_2_val = int_j_2.evaluate(lv=lv, phase=90)
+            yseam = int_j_2_val/self.U_H/self.omega
+            Qseamsweep.append(gseam/yseam)
+#        Qseamsweep['Qseam_sweep_'+seam+'_'+str(mode)] = gseam/yseam
+            #Cprint 'Qseam_' + seam + '_' + str(mode) + str(' = ') + str(gseam/yseam)
+        if pltresult:
+            fig, ax = plt.subplots()
+            ax.plot(values,Qseamsweep)
+            ax.set_yscale('log')
+            ax.set_xlabel(variable+' ('+unit+')')
+            ax.set_ylabel('Q'+'_'+seam)
+        return Qseamsweep
 
     def get_Qdielectric(self, dielectric, mode, variation):
         Qdielectric = {}
@@ -334,7 +368,7 @@ class Bbq(object):
                     print 'Taking mode number ' + str(mode) + ' / ' + str(self.nmodes-1)
                     self.solutions.set_mode(mode+1, 0)
                     self.fields = self.setup.get_fields()
-                    self.omega = 2*np.pi*freqs_bare_vals[mode]*1e9
+                    self.omega = 2*np.pi*freqs_bare_vals[mode]
 
                     print 'Caluclating U_H ...'
                     self.U_H = self.calc_U_H(variation)

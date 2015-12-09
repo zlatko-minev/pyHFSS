@@ -414,21 +414,26 @@ class HfssDesign(COMWrapper):
     def get_nominal_variation(self):
         return self._design.GetNominalVariation()
 
-    def create_variable(self, name, value):
+    def create_variable(self, name, value, postprocessing=False):
+        if postprocessing==True:
+            variableprop = "PostProcessingVariableProp"
+        else:
+            variableprop = "VariableProp"
+            
         self._design.ChangeProperty(
             ["NAME:AllTabs",
              ["NAME:LocalVariableTab",
               ["NAME:PropServers", "LocalVariables"],
               ["Name:NewProps",
                ["NAME:" + name,
-                "PropType:=", "VariableProp",
+                "PropType:=", variableprop,
                 "UserDef:=", True,
                 "Value:=", value]]]])
 
-    def set_variable(self, name, value):
+    def set_variable(self, name, value, postprocessing=False):
         # TODO: check if variable does not exist and quit if it doesn't?
-        if name not in self._design.GetVariables():
-            self.create_variable(name, value)
+        if name not in self._design.GetVariables()+self._design.GetPostProcessingVariables():
+            self.create_variable(name, value, postprocessing=postprocessing)
         else:
             self._design.SetVariableValue(name, value)
         return VariableString(name)
@@ -437,17 +442,17 @@ class HfssDesign(COMWrapper):
         return self._design.GetVariableValue(name)
         
     def get_variable_names(self):
-        return [VariableString(s) for s in self._design.GetVariables()]        
+        return [VariableString(s) for s in self._design.GetVariables()+self._design.GetPostProcessingVariables()]        
         
     def get_variables(self):
-        local_variables = self._design.GetVariables()
+        local_variables = self._design.GetVariables()+self._design.GetPostProcessingVariables()
         return {lv : self.get_variable_value(lv) for lv in local_variables}
  
     def copy_design_variables(self, source_design):        
         ''' does not check that variables are all present '''
         
         # don't care about values
-        source_variables = source_design.get_variables() 
+        source_variables = source_design.get_variables()
         
         for name, value in source_variables.iteritems():
             self.set_variable(name, value)
