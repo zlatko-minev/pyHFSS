@@ -28,6 +28,7 @@ def fact(n):
 def nck(n, k):
     return fact(n)/(fact(k)*fact(n-k))
 
+
 class Bbq(object):
     """ 
     This class defines a BBQ object which calculates and saves
@@ -326,7 +327,7 @@ class Bbq(object):
                     print 'Taking mode number ' + str(mode) + ' / ' + str(self.nmodes-1)
                     self.solutions.set_mode(mode+1, 0)
                     self.fields = self.setup.get_fields()
-                    self.omega = 2*np.pi*freqs_bare_vals[mode]*1e9 # ZKM: Possible error, i dont have 1e9
+                    self.omega = 2*np.pi*freqs_bare_vals[mode]*(1e9 if freqs_bare_vals[mode] < 1e8 else 1) 
 
                     print 'Caluclating U_H ...'
                     self.U_H = self.calc_U_H(variation)
