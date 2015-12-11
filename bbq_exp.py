@@ -11,10 +11,10 @@ design = project.get_design("CoaxCav")
 bbq_exp = bbq.Bbq(project, design, append_analysis=False, calculate_H=False)
 
 bbq_exp.do_bbq('L_qub', modes = [0], surface=True, seams=['seam'])
-bbq_exp.bbq_analysis.plot_Hparams(variable_name='_$Rin_cav')
+#bbq_exp.bbq_analysis.plot_Hparams(variable_name='_$Rin_cav')
 
 
-bbq_exp.get_Qseam_sweep('seam', 0, '0', 'seam',np.linspace(-20,20,21), 'mm')
+bbq_exp.get_Qseam_sweep('seam', 0, '0', 'seam',np.linspace(-9,30,40), 'mm')
 
 #ba=bbq_exp.bbq_analysis
 #bbq_exp.bbq_analysis.print_Hparams(variation='0',modes=[0,1,2])

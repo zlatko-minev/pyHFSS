@@ -27,6 +27,22 @@ def fact(n):
 
 def nck(n, k):
     return fact(n)/(fact(k)*fact(n-k))
+    
+import warnings
+def deprecated(func):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emmitted
+    when the function is used."""
+    def newFunc(*args, **kwargs):
+        warnings.simplefilter('always', DeprecationWarning) #turn off filter 
+        warnings.warn("Call to deprecated function {}.".format(func.__name__), category=DeprecationWarning, stacklevel=2)
+        warnings.simplefilter('default', DeprecationWarning) #reset filter
+        return func(*args, **kwargs)
+    newFunc.__name__ = func.__name__
+    newFunc.__doc__ = func.__doc__
+    newFunc.__dict__.update(func.__dict__)
+    return newFunc
+
 
 class Bbq(object):
     """ 
@@ -93,8 +109,12 @@ class Bbq(object):
         self.data_dir = data_dir
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
         print "Data will be saved in " + str(data_dir)
-
+        
+    @deprecated
     def calc_p_j(self, modes=None, variation=None):
+        '''
+        calculate p_j from a predefined named expression in HFSS called P_J
+        '''
         lv = self.get_lv(variation)
         if modes is None:
             modes = range(self.nmodes)
@@ -182,7 +202,11 @@ class Bbq(object):
     
     
     def get_Qseam(self, seam, mode, variation):
-        # ref: http://arxiv.org/pdf/1509.01119.pdf
+        '''
+        caculate the contribution to Q of a seam, by integrating the current in
+        the seam with finite conductance: set in the config file
+        ref: http://arxiv.org/pdf/1509.01119.pdf
+        '''
         lv = self.get_lv(variation)
         Qseam = {}
         print 'Calculating Qseam_'+ seam +' for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
@@ -238,7 +262,11 @@ class Bbq(object):
         return Qdielectric
 
     def get_Qsurface(self, mode, variation):
-        # ref: http://arxiv.org/pdf/1509.01854.pdf
+        '''
+        caculate the contribution to Q of a dieletric layer of dirt on all surfaces
+        set the dirt thickness and loss tangent in the config file
+        ref: http://arxiv.org/pdf/1509.01854.pdf
+        '''
         lv = self.get_lv(variation)
         Qsurf = {}
         print 'Calculating Qsurface for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
@@ -276,7 +304,7 @@ class Bbq(object):
 
         return Hparams
        
-    def calc_U_E(self, variation, volume=None, phase=0):
+    def calc_U_E(self, variation, volume=None):
         lv = self.get_lv(variation)
         if volume is None:
             volume = 'AllObjects'
@@ -289,7 +317,7 @@ class Bbq(object):
         A=A.dot(B)
         A=A.real()
         A=A.integrate_vol(name=volume)
-        return A.evaluate(lv=lv, phase=0)
+        return A.evaluate(lv=lv)
         
     def calc_U_H(self, variation, volume=None):
         lv = self.get_lv(variation)
@@ -304,7 +332,7 @@ class Bbq(object):
         A=A.dot(B)
         A=A.real()
         A=A.integrate_vol(name=volume)
-        return A.evaluate(lv=lv, phase=0)
+        return A.evaluate(lv=lv)
         
     def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None):
         # seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
@@ -330,7 +358,10 @@ class Bbq(object):
         # A variation is a combination of project/design 
         # variables in an optimetric sweep
         if variations is None:
-            variations = [str(i) for i in range(self.nvariations)]
+            if self.listvariations == (u'',): # no optimetric sweep
+                variations = ['-1']
+            else:
+                variations = [str(i) for i in range(self.nvariations)]
         self.variations = variations
 
         if modes is None:
