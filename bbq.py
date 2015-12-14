@@ -44,6 +44,7 @@ def deprecated(func):
     return newFunc
 
 
+
 class Bbq(object):
     """ 
     This class defines a BBQ object which calculates and saves
@@ -113,7 +114,8 @@ class Bbq(object):
     @deprecated
     def calc_p_j(self, modes=None, variation=None):
         '''
-        calculate p_j from a predefined named expression in HFSS called P_J
+        Calculates the p_j for all the modes. 
+        Requires a calculator expression called P_J.
         '''
         lv = self.get_lv(variation)
         if modes is None:
