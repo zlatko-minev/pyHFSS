@@ -432,13 +432,8 @@ class HfssDesign(COMWrapper):
 
     def set_variable(self, name, value, postprocessing=False):
         # TODO: check if variable does not exist and quit if it doesn't?
-<<<<<<< HEAD
-        if (name not in self._design.GetVariables()) and (name not in self._design.GetPostProcessingVariables()):
-            self.create_variable(name, value)
-=======
         if name not in self._design.GetVariables()+self._design.GetPostProcessingVariables():
             self.create_variable(name, value, postprocessing=postprocessing)
->>>>>>> f020b279126370b1dbd01b65ca6ed67432cb8c3d
         else:
             self._design.SetVariableValue(name, value)
         return VariableString(name)
