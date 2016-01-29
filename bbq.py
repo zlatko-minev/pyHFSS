@@ -27,6 +27,23 @@ def fact(n):
 
 def nck(n, k):
     return fact(n)/(fact(k)*fact(n-k))
+    
+import warnings
+def deprecated(func):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emmitted
+    when the function is used."""
+    def newFunc(*args, **kwargs):
+        warnings.simplefilter('always', DeprecationWarning) #turn off filter 
+        warnings.warn("Call to deprecated function {}.".format(func.__name__), category=DeprecationWarning, stacklevel=2)
+        warnings.simplefilter('default', DeprecationWarning) #reset filter
+        return func(*args, **kwargs)
+    newFunc.__name__ = func.__name__
+    newFunc.__doc__ = func.__doc__
+    newFunc.__dict__.update(func.__dict__)
+    return newFunc
+
+
 
 class Bbq(object):
     """ 
@@ -92,8 +109,14 @@ class Bbq(object):
             os.makedirs(data_dir)
         self.data_dir = data_dir
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
-
+        print "Data will be saved in " + str(data_dir)
+        
+    @deprecated
     def calc_p_j(self, modes=None, variation=None):
+        '''
+        Calculates the p_j for all the modes. 
+        Requires a calculator expression called P_J.
+        '''
         lv = self.get_lv(variation)
         if modes is None:
             modes = range(self.nmodes)
@@ -127,6 +150,7 @@ class Bbq(object):
             if kappa_over_2pis is not None:
                 freqs_bare_dict['Q_'+str(m)] = freqs[m]/kappa_over_2pis[m]
         self.freqs_bare = freqs_bare_dict
+        self.freqs_bare_vals = freqs_bare_vals
         if self.verbose: print freqs_bare_dict
         return freqs_bare_dict, freqs_bare_vals
         
@@ -180,15 +204,54 @@ class Bbq(object):
     
     
     def get_Qseam(self, seam, mode, variation):
-        # ref: http://arxiv.org/pdf/1509.01119.pdf
+        '''
+        caculate the contribution to Q of a seam, by integrating the current in
+        the seam with finite conductance: set in the config file
+        ref: http://arxiv.org/pdf/1509.01119.pdf
+        '''
         lv = self.get_lv(variation)
         Qseam = {}
         print 'Calculating Qseam_'+ seam +' for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
-        int_j_2 = (self.fields.Vector_Jsurf.norm_2()).integrate_line(seam) # overestimating the loss by taking norm2 of j, rather than jperp**2
-        int_j_2_val = int_j_2.evaluate(lv=lv,phase=90)
+        j_2_norm = self.fields.Vector_Jsurf.norm_2() # overestimating the loss by taking norm2 of j, rather than jperp**2
+        int_j_2 = j_2_norm.integrate_line(seam)
+        int_j_2_val = int_j_2.evaluate(lv=lv, phase=90)
         yseam = int_j_2_val/self.U_H/self.omega
         Qseam['Qseam_'+seam+'_'+str(mode)] = gseam/yseam
+        print 'Qseam_' + seam + '_' + str(mode) + str(' = ') + str(gseam/yseam)
         return Qseam
+
+    def get_Qseam_sweep(self, seam, mode, variation, variable, values, unit, pltresult=True):
+        # values = ['5mm','6mm','7mm']
+        # ref: http://arxiv.org/pdf/1509.01119.pdf
+        
+        self.solutions.set_mode(mode+1, 0)
+        self.fields = self.setup.get_fields()
+        freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
+        self.omega = 2*np.pi*freqs_bare_vals[mode]
+        print variation
+        print type(variation)
+        print eval(variation)
+        self.U_H = self.calc_U_H(variation)
+        lv = self.get_lv(variation)
+        Qseamsweep = []
+        print 'Calculating Qseam_'+ seam +' for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
+        for value in values:
+            self.design.set_variable(variable, str(value)+unit)
+            
+            j_2_norm = self.fields.Vector_Jsurf.norm_2() # overestimating the loss by taking norm2 of j, rather than jperp**2
+            int_j_2 = j_2_norm.integrate_line(seam)
+            int_j_2_val = int_j_2.evaluate(lv=lv, phase=90)
+            yseam = int_j_2_val/self.U_H/self.omega
+            Qseamsweep.append(gseam/yseam)
+#        Qseamsweep['Qseam_sweep_'+seam+'_'+str(mode)] = gseam/yseam
+            #Cprint 'Qseam_' + seam + '_' + str(mode) + str(' = ') + str(gseam/yseam)
+        if pltresult:
+            fig, ax = plt.subplots()
+            ax.plot(values,Qseamsweep)
+            ax.set_yscale('log')
+            ax.set_xlabel(variable+' ('+unit+')')
+            ax.set_ylabel('Q'+'_'+seam)
+        return Qseamsweep
 
     def get_Qdielectric(self, dielectric, mode, variation):
         Qdielectric = {}
@@ -201,7 +264,11 @@ class Bbq(object):
         return Qdielectric
 
     def get_Qsurface(self, mode, variation):
-        # ref: http://arxiv.org/pdf/1509.01854.pdf
+        '''
+        caculate the contribution to Q of a dieletric layer of dirt on all surfaces
+        set the dirt thickness and loss tangent in the config file
+        ref: http://arxiv.org/pdf/1509.01854.pdf
+        '''
         lv = self.get_lv(variation)
         Qsurf = {}
         print 'Calculating Qsurface for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
@@ -239,7 +306,7 @@ class Bbq(object):
 
         return Hparams
        
-    def calc_U_E(self, variation, volume=None, phase=0):
+    def calc_U_E(self, variation, volume=None):
         lv = self.get_lv(variation)
         if volume is None:
             volume = 'AllObjects'
@@ -252,7 +319,7 @@ class Bbq(object):
         A=A.dot(B)
         A=A.real()
         A=A.integrate_vol(name=volume)
-        return A.evaluate(lv=lv, phase=0)
+        return A.evaluate(lv=lv)
         
     def calc_U_H(self, variation, volume=None):
         lv = self.get_lv(variation)
@@ -267,10 +334,11 @@ class Bbq(object):
         A=A.dot(B)
         A=A.real()
         A=A.integrate_vol(name=volume)
-        return A.evaluate(lv=lv, phase=0)
+        return A.evaluate(lv=lv)
         
     def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None):
-        
+        # seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
+        # variations = ['0', '1']
         if self.latest_h5_path is not None and self.append_analysis:
             shutil.copyfile(self.latest_h5_path, self.data_filename)
         
@@ -281,10 +349,21 @@ class Bbq(object):
         data_list = []
         data = {}
         
+        if seams is not None:
+            self.seams = seams
+            data['seams'] = seams
+            
+        if dielectrics is not None:
+            self.dielectrics = dielectrics
+            data['dielectrics'] = dielectrics
+        
         # A variation is a combination of project/design 
         # variables in an optimetric sweep
         if variations is None:
-            variations = [str(i) for i in range(self.nvariations)]
+            if self.listvariations == (u'',): # no optimetric sweep
+                variations = ['-1']
+            else:
+                variations = [str(i) for i in range(self.nvariations)]
         self.variations = variations
 
         if modes is None:
@@ -322,7 +401,7 @@ class Bbq(object):
                     print 'Taking mode number ' + str(mode) + ' / ' + str(self.nmodes-1)
                     self.solutions.set_mode(mode+1, 0)
                     self.fields = self.setup.get_fields()
-                    self.omega = 2*np.pi*freqs_bare_vals[mode]*1e9
+                    self.omega = 2*np.pi*freqs_bare_vals[mode]
 
                     print 'Caluclating U_H ...'
                     self.U_H = self.calc_U_H(variation)
@@ -480,6 +559,8 @@ class BbqAnalysis(object):
             freq_m = 'freq_'+str(m)
             Kerr_m = 'alpha_'+str(m)
             Q_m = 'Q_'+str(m)
+            Qsurf_m = 'Qsurf_'+str(m)
+            
             if freq_m not in self.h5data[self.variations[0]].keys():
                 freq_m = 'freq_bare_'+str(m)
             else:
@@ -489,11 +570,33 @@ class BbqAnalysis(object):
             else:
                 pass
     
-            ax[0][0].plot(xaxis, self.get_variable_variations(freq_m)/1e9, 'o', label=str(m))            
+            ax[0][0].plot(xaxis, self.get_variable_variations(freq_m)/1e9, 'o', label=str(m))     
+            
             if Q_m in self.h5data[self.variations[0]].keys():             
-                ax[1][1].plot(xaxis, self.get_variable_variations(Q_m), 'o', label = str(m))
+                ax[1][1].plot(xaxis, self.get_variable_variations(Q_m), 'o', label = Q_m)
             else:
                 pass
+            
+            if Qsurf_m in self.h5data[self.variations[0]].keys():             
+                ax[1][1].plot(xaxis, self.get_variable_variations(Qsurf_m), 'o', label = Qsurf_m)
+            else:
+                pass            
+            
+            if 'seams' in self.h5data[self.variations[0]].keys():
+                for seam in self.h5data[self.variations[0]]['seams'].value:
+                    Qseam_m = 'Qseam_'+seam+'_'+str(m)
+                    if Qseam_m in self.h5data[self.variations[0]].keys():             
+                        ax[1][1].plot(xaxis, self.get_variable_variations(Qseam_m), 'o', label = Qseam_m)
+                    else:
+                        pass
+                    
+            if 'dielectrics' in self.h5data[self.variations[0]].keys():
+                for dielectric in self.h5data[self.variations[0]]['dielectrics'].value:
+                    Qdielectric_m = 'Qdielectric_'+dielectric+'_'+str(m)
+                    if Qdielectric_m in self.h5data[self.variations[0]].keys():             
+                        ax[1][1].plot(xaxis, self.get_variable_variations(Qdielectric_m), 'o', label = Qdielectric_m)
+                    else:
+                        pass            
             
             for n in modes[0:ii]:
                 chi_m_n = 'chi_'+str(m)+'_'+str(n)

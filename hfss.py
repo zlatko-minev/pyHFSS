@@ -414,21 +414,31 @@ class HfssDesign(COMWrapper):
     def get_nominal_variation(self):
         return self._design.GetNominalVariation()
 
-    def create_variable(self, name, value):
+    def create_variable(self, name, value, postprocessing=False):
+        if postprocessing==True:
+            variableprop = "PostProcessingVariableProp"
+        else:
+            variableprop = "VariableProp"
+            
         self._design.ChangeProperty(
             ["NAME:AllTabs",
              ["NAME:LocalVariableTab",
               ["NAME:PropServers", "LocalVariables"],
               ["Name:NewProps",
                ["NAME:" + name,
-                "PropType:=", "VariableProp",
+                "PropType:=", variableprop,
                 "UserDef:=", True,
                 "Value:=", value]]]])
 
-    def set_variable(self, name, value):
+    def set_variable(self, name, value, postprocessing=False):
         # TODO: check if variable does not exist and quit if it doesn't?
+<<<<<<< HEAD
         if (name not in self._design.GetVariables()) and (name not in self._design.GetPostProcessingVariables()):
             self.create_variable(name, value)
+=======
+        if name not in self._design.GetVariables()+self._design.GetPostProcessingVariables():
+            self.create_variable(name, value, postprocessing=postprocessing)
+>>>>>>> f020b279126370b1dbd01b65ca6ed67432cb8c3d
         else:
             self._design.SetVariableValue(name, value)
         return VariableString(name)
@@ -437,17 +447,17 @@ class HfssDesign(COMWrapper):
         return self._design.GetVariableValue(name)
         
     def get_variable_names(self):
-        return [VariableString(s) for s in self._design.GetVariables()]        
+        return [VariableString(s) for s in self._design.GetVariables()+self._design.GetPostProcessingVariables()]        
         
     def get_variables(self):
-        local_variables = self._design.GetVariables()
+        local_variables = self._design.GetVariables()+self._design.GetPostProcessingVariables()
         return {lv : self.get_variable_value(lv) for lv in local_variables}
  
     def copy_design_variables(self, source_design):        
         ''' does not check that variables are all present '''
         
         # don't care about values
-        source_variables = source_design.get_variables() 
+        source_variables = source_design.get_variables()
         
         for name, value in source_variables.iteritems():
             self.set_variable(name, value)
@@ -670,7 +680,11 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
         fn = tempfile.mktemp()
         self._solutions.ExportEigenmodes(self.parent.solution_name, lv, fn)
         data = numpy.loadtxt(fn, dtype='str')
-        if numpy.size(data[0,:])==6:
+        if numpy.size(numpy.shape(data)) == 1: # getting around the very annoying fact that 
+            data = numpy.array([data])         # in Python a 1D array does not have shape (N,1)
+        else:                                  # but rather (N,) ....
+            pass
+        if numpy.size(data[0,:])==6: # checking if values for Q were saved
             kappa_over_2pis = [2*float(ii) for ii in data[:,3]] # eigvalue=(omega-i*kappa/2)/2pi
                                                     # so kappa/2pi = 2*Im(eigvalue)
         else:
@@ -1097,6 +1111,9 @@ class CalcObject(COMWrapper):
     def __abs__(self):
         return self._unary_op("Abs")
         
+    def __mag__(self):
+        return self._unary_op("Mag")
+        
     def conj(self):
         return self._unary_op("Conj") # make this right
 
@@ -1110,7 +1127,8 @@ class CalcObject(COMWrapper):
         return self._unary_op("ScalarZ")
 
     def norm_2(self):
-        return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
+        return (self.__mag__()).__pow__(2)        
+        #return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
 
     def real(self):
         return self._unary_op("Real")
@@ -1202,6 +1220,18 @@ class ConstantCalcObject(CalcObject):
         super(ConstantCalcObject, self).__init__(stack, setup)
 
 def get_active_project():
+    ''' If you see the error:
+        "The requested operation requires elevation."
+        then you need to run your python as an admin.
+    '''
+    import ctypes, os
+    try:
+        is_admin = os.getuid() == 0
+    except AttributeError:
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+    if not is_admin:
+        print '\033[93m WARNING: you are not runnning as an admin! You need to run as an admin. You will probably get an error next. \033[0m'
+    
     app = HfssApp()
     desktop = app.get_app_desktop()
     return desktop.get_active_project()
