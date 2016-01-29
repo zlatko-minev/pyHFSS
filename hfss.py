@@ -229,7 +229,7 @@ class HfssProject(COMWrapper):
         super(HfssProject, self).__init__()
         self.parent = desktop
         self._project = project
-        self.name = project.GetName()
+        #self.name = project.GetName()
 
     def close(self):
         self._project.Close()
