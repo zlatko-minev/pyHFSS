@@ -5,7 +5,7 @@ Created on Fri Oct 30 14:21:45 2015
 @author: Zaki
 """
 
-root_dir = 'Y:/Data/PumpingCats/HFSS/Analyzed'
+root_dir = 'D:/hfss/pyHFSS'
 
 # seams:
 # ref: http://arxiv.org/pdf/1509.01119.pdf

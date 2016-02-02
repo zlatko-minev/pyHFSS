@@ -229,7 +229,7 @@ class HfssProject(COMWrapper):
         super(HfssProject, self).__init__()
         self.parent = desktop
         self._project = project
-        self.name = project.GetName()
+        #self.name = project.GetName()
 
     def close(self):
         self._project.Close()
@@ -414,21 +414,26 @@ class HfssDesign(COMWrapper):
     def get_nominal_variation(self):
         return self._design.GetNominalVariation()
 
-    def create_variable(self, name, value):
+    def create_variable(self, name, value, postprocessing=False):
+        if postprocessing==True:
+            variableprop = "PostProcessingVariableProp"
+        else:
+            variableprop = "VariableProp"
+            
         self._design.ChangeProperty(
             ["NAME:AllTabs",
              ["NAME:LocalVariableTab",
               ["NAME:PropServers", "LocalVariables"],
               ["Name:NewProps",
                ["NAME:" + name,
-                "PropType:=", "VariableProp",
+                "PropType:=", variableprop,
                 "UserDef:=", True,
                 "Value:=", value]]]])
 
-    def set_variable(self, name, value):
+    def set_variable(self, name, value, postprocessing=False):
         # TODO: check if variable does not exist and quit if it doesn't?
-        if name not in self._design.GetVariables():
-            self.create_variable(name, value)
+        if name not in self._design.GetVariables()+self._design.GetPostProcessingVariables():
+            self.create_variable(name, value, postprocessing=postprocessing)
         else:
             self._design.SetVariableValue(name, value)
         return VariableString(name)
@@ -437,17 +442,17 @@ class HfssDesign(COMWrapper):
         return self._design.GetVariableValue(name)
         
     def get_variable_names(self):
-        return [VariableString(s) for s in self._design.GetVariables()]        
+        return [VariableString(s) for s in self._design.GetVariables()+self._design.GetPostProcessingVariables()]        
         
     def get_variables(self):
-        local_variables = self._design.GetVariables()
+        local_variables = self._design.GetVariables()+self._design.GetPostProcessingVariables()
         return {lv : self.get_variable_value(lv) for lv in local_variables}
  
     def copy_design_variables(self, source_design):        
         ''' does not check that variables are all present '''
         
         # don't care about values
-        source_variables = source_design.get_variables() 
+        source_variables = source_design.get_variables()
         
         for name, value in source_variables.iteritems():
             self.set_variable(name, value)
@@ -472,6 +477,9 @@ class HfssDesign(COMWrapper):
     def eval_expr(self, expr, units="mm"):
         return str(self._evaluate_variable_expression(expr, units)) + units
 
+    def Clear_Field_Clac_Stack(self):
+        self._fields_calc.CalcStack("Clear")
+    
 class HfssSetup(HfssPropertyObject):
     prop_tab = "HfssTab"
     passes = make_int_prop("Passes")
@@ -667,7 +675,11 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
         fn = tempfile.mktemp()
         self._solutions.ExportEigenmodes(self.parent.solution_name, lv, fn)
         data = numpy.loadtxt(fn, dtype='str')
-        if numpy.size(data[0,:])==6:
+        if numpy.size(numpy.shape(data)) == 1: # getting around the very annoying fact that 
+            data = numpy.array([data])         # in Python a 1D array does not have shape (N,1)
+        else:                                  # but rather (N,) ....
+            pass
+        if numpy.size(data[0,:])==6: # checking if values for Q were saved
             kappa_over_2pis = [2*float(ii) for ii in data[:,3]] # eigvalue=(omega-i*kappa/2)/2pi
                                                     # so kappa/2pi = 2*Im(eigvalue)
         else:
@@ -953,7 +965,7 @@ class ModelEntity(str, HfssPropertyObject):
         :type val: str
         :type modeler: HfssModeler
         """
-        super(ModelEntity, self).__init__(val)
+        super(ModelEntity, self).__init__()#val) #Comment out keyword to match arguments
         self.modeler = modeler
         self.prop_server = self + ":" + self.model_command + ":1"
 
@@ -1033,7 +1045,6 @@ class HfssFieldsCalc(COMWrapper):
     def clear_named_expressions(self):
         self.parent.parent._fields_calc.ClearAllNamedExpr()
 
-
 class CalcObject(COMWrapper):
     def __init__(self, stack, setup):
         """
@@ -1044,7 +1055,7 @@ class CalcObject(COMWrapper):
         self.stack = stack
         self.setup = setup
         self.calc_module = setup.parent._fields_calc
-
+        
     def _bin_op(self, other, op):
         if isinstance(other, (int, float)):
             other = ConstantCalcObject(other, self.setup)
@@ -1095,6 +1106,9 @@ class CalcObject(COMWrapper):
     def __abs__(self):
         return self._unary_op("Abs")
         
+    def __mag__(self):
+        return self._unary_op("Mag")
+        
     def conj(self):
         return self._unary_op("Conj") # make this right
 
@@ -1108,7 +1122,8 @@ class CalcObject(COMWrapper):
         return self._unary_op("ScalarZ")
 
     def norm_2(self):
-        return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
+        return (self.__mag__()).__pow__(2)        
+        #return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
 
     def real(self):
         return self._unary_op("Real")
@@ -1126,6 +1141,16 @@ class CalcObject(COMWrapper):
 
     def integrate_line(self, name):
         return self._integrate(name, "EnterLine")
+        
+    def integrate_line_tangent(self, name): 
+        ''' integrate line tangent to vector expression \n
+            name = of line to integrate over '''
+        self.stack = self.stack + [("EnterLine", name),
+                                   ("CalcOp",    "Tangent"),
+                                   ("CalcOp",    "Dot")]#,
+                              #("EnterLine", name),
+                              #("CalcOp",   "Integrate")]
+        return self.integrate_line(name)
 
     def integrate_surf(self, name="AllObjects"):
         return self._integrate(name, "EnterSurf")
@@ -1155,11 +1180,12 @@ class CalcObject(COMWrapper):
         self.calc_module.AddNamedExpr(name)
         return NamedCalcObject(name, self.setup)
 
-    def evaluate(self, phase=0, lv=None):#, n_mode=1):
+    def evaluate(self, phase=0, lv=None, print_debug = False):#, n_mode=1):
         self.write_stack()
-        print '---------------------'
-        print 'writing to stack: OK'
-        print '-----------------'
+        if print_debug:
+            print '---------------------'
+            print 'writing to stack: OK'
+            print '-----------------'
         #self.calc_module.set_mode(n_mode, 0)
         setup_name = self.setup.solution_name
         
@@ -1182,7 +1208,6 @@ class NamedCalcObject(CalcObject):
         self.name = name
         stack = [("CopyNamedExprToStack", name)]
         super(NamedCalcObject, self).__init__(stack, setup)
-
 
 class ConstantCalcObject(CalcObject):
     def __init__(self, num, setup):
