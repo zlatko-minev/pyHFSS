@@ -229,7 +229,7 @@ class HfssProject(COMWrapper):
         super(HfssProject, self).__init__()
         self.parent = desktop
         self._project = project
-        self.name = project.GetName()
+        #self.name = project.GetName()
 
     def close(self):
         self._project.Close()
@@ -477,6 +477,9 @@ class HfssDesign(COMWrapper):
     def eval_expr(self, expr, units="mm"):
         return str(self._evaluate_variable_expression(expr, units)) + units
 
+    def Clear_Field_Clac_Stack(self):
+        self._fields_calc.CalcStack("Clear")
+    
 class HfssSetup(HfssPropertyObject):
     prop_tab = "HfssTab"
     passes = make_int_prop("Passes")
@@ -962,7 +965,7 @@ class ModelEntity(str, HfssPropertyObject):
         :type val: str
         :type modeler: HfssModeler
         """
-        super(ModelEntity, self).__init__(val)
+        super(ModelEntity, self).__init__()#val) #Comment out keyword to match arguments
         self.modeler = modeler
         self.prop_server = self + ":" + self.model_command + ":1"
 
@@ -1042,7 +1045,6 @@ class HfssFieldsCalc(COMWrapper):
     def clear_named_expressions(self):
         self.parent.parent._fields_calc.ClearAllNamedExpr()
 
-
 class CalcObject(COMWrapper):
     def __init__(self, stack, setup):
         """
@@ -1053,7 +1055,7 @@ class CalcObject(COMWrapper):
         self.stack = stack
         self.setup = setup
         self.calc_module = setup.parent._fields_calc
-
+        
     def _bin_op(self, other, op):
         if isinstance(other, (int, float)):
             other = ConstantCalcObject(other, self.setup)
@@ -1139,6 +1141,16 @@ class CalcObject(COMWrapper):
 
     def integrate_line(self, name):
         return self._integrate(name, "EnterLine")
+        
+    def integrate_line_tangent(self, name): 
+        ''' integrate line tangent to vector expression \n
+            name = of line to integrate over '''
+        self.stack = self.stack + [("EnterLine", name),
+                                   ("CalcOp",    "Tangent"),
+                                   ("CalcOp",    "Dot")]#,
+                              #("EnterLine", name),
+                              #("CalcOp",   "Integrate")]
+        return self.integrate_line(name)
 
     def integrate_surf(self, name="AllObjects"):
         return self._integrate(name, "EnterSurf")
@@ -1168,11 +1180,12 @@ class CalcObject(COMWrapper):
         self.calc_module.AddNamedExpr(name)
         return NamedCalcObject(name, self.setup)
 
-    def evaluate(self, phase=0, lv=None):#, n_mode=1):
+    def evaluate(self, phase=0, lv=None, print_debug = False):#, n_mode=1):
         self.write_stack()
-        print '---------------------'
-        print 'writing to stack: OK'
-        print '-----------------'
+        if print_debug:
+            print '---------------------'
+            print 'writing to stack: OK'
+            print '-----------------'
         #self.calc_module.set_mode(n_mode, 0)
         setup_name = self.setup.solution_name
         
@@ -1195,7 +1208,6 @@ class NamedCalcObject(CalcObject):
         self.name = name
         stack = [("CopyNamedExprToStack", name)]
         super(NamedCalcObject, self).__init__(stack, setup)
-
 
 class ConstantCalcObject(CalcObject):
     def __init__(self, num, setup):
