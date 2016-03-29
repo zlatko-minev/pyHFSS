@@ -6,15 +6,19 @@ from scipy.constants import *
 plt.close('all')
 
 project = get_active_project()
-design = project.get_design("CoaxCav")
+design = project.get_design("Design")
 
-bbq_exp = bbq.Bbq(project, design, append_analysis=False, calculate_H=False)
+bbq_exp = bbq.Bbq(project, design, append_analysis=False, calculate_H=True)
 
-bbq_exp.do_bbq('L_qub', modes = [0], surface=True, seams=['seam'])
-#bbq_exp.bbq_analysis.plot_Hparams(variable_name='_$Rin_cav')
+bbq_exp.do_bbq("LJ", surface=True, seams=["seam1"])
+
+#bbq_exp.bbq_analysis.plot_Hparams()
 
 
-bbq_exp.get_Qseam_sweep('seam', 0, '0', 'seam',np.linspace(-9,30,40), 'mm')
+#bbq_exp.get_Qseam_sweep('seam1', 0, '0', 'seamz',np.linspace(0,35,36), 'mm')
+
+#for k in range(39):
+#    bbq_exp.get_Qseam('seam1', 0, str(k))
 
 #ba=bbq_exp.bbq_analysis
 #bbq_exp.bbq_analysis.print_Hparams(variation='0',modes=[0,1,2])
