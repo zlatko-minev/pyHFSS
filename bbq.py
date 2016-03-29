@@ -6,6 +6,7 @@ Created on Thu Sep 10 11:46:56 2015
 """
 
 from hfss import *
+from hfss import CalcObject
 import numpy as np
 import h5py
 import time
@@ -15,7 +16,7 @@ import matplotlib.pyplot as plt
 from stat import S_ISREG, ST_CTIME, ST_MODE
 import sys
 import shutil
-import time
+import time, pandas as pd
 from config_bbq import *
 
 fluxQ = hbar / (2*e)
@@ -54,7 +55,7 @@ class Bbq(object):
     def __init__(self, project, design, verbose=True, append_analysis=False, calculate_H=True):
         self.project = project
         self.design = design
-        self.setup = design.get_setup()
+        self.setup = design.get_setup() # ?? what if there are multiple setups?
         self.fields = self.setup.get_fields()
         self.nmodes = int(self.setup.n_modes)
         self.listvariations = design._solutions.ListVariations(str(self.setup.solution_name))
@@ -156,6 +157,8 @@ class Bbq(object):
         
         
     def get_lv(self, variation):
+        ''' variation is a string #; e.g., '0'
+            returns array of var names and var values '''
         if variation is None:
             lv = self.nominalvariation
             lv = self.parse_listvariations(lv)
@@ -307,6 +310,7 @@ class Bbq(object):
         return Hparams
        
     def calc_U_E(self, variation, volume=None):
+        ''' This is 2 * the peak electric energy.(since we do not divide by 2, and use the peak phasors) '''
         lv = self.get_lv(variation)
         if volume is None:
             volume = 'AllObjects'
@@ -336,19 +340,46 @@ class Bbq(object):
         A=A.integrate_vol(name=volume)
         return A.evaluate(lv=lv)
         
-    def do_bbq(self, LJvariablename, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None):
-        # seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
-        # variations = ['0', '1']
-        if self.latest_h5_path is not None and self.append_analysis:
-            shutil.copyfile(self.latest_h5_path, self.data_filename)
-        
-        self.h5file = h5py.File(self.data_filename)
-        calc_fields = (seams is not None) or (dielectrics is not None) or surface or self.calculate_H
+    def do_bbq(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calculate_H = None,
+               Pj_from_current = False, junc_rect = [], junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag',
+               verbose = 2 ):
+        """ 
+            calculate_H:  
+                True: 1 junction method of Pj calculation based on U_H-U_E global. 
+                
+            Pj_from_current:
+                Multi-junction calculation of energy participation ratio matrix based on <I_J>. Current is integrated average of J_surf by default: (zkm 3/29/16)
+                Will calculate the Pj matrix for the selected modes for the given junctions junc_rect array & length of juuncs
+                
+                junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
+                junc_len = [0.0001]   specify in SI units; i.e., meters
+                junc_LJ_var_name = ['LJ1', 'LJ2']
+                pJ_method = 'J_surf_mag'   - currently only 1 implemented - takes the avg. Jsurf over the rect. Make sure you have seeded lots of tets here. i recommend starting with 4 across smallest dimension.
 
-        # list of data dictionaries. One dict per optimetric sweep.
-        data_list = []
-        data = {}
+                Assumptions:
+                    Low dissipation (high-Q). 
+                    Right now, we assume that there are no lumped capcitors to simply calculations. Not required. 
+                    We assume that there are only lumped inductors, so that U_tot = U_E+U_H+U_L    and U_C =0, so that U_tot = 2*U_E;
+                Results in:
+                    self.PJ_multi_sol - a Pandas DataFrame of all the information
+            
+            Other parameters:
+                seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
+                variations = ['0', '1']
+        """
+        ### Process Input Params 
+        # Single- junction & seam / dielectric data storage 
+        data_list = [];  data = {} # List of data dictionaries. One dict per optimetric sweep.
+        if LJvariablename  is None: calculate_H      = None
+        if calculate_H is not None: self.calculate_H = calculate_H
+        calc_fields = (seams is not None) or (dielectrics is not None) or surface or self.calculate_H or Pj_from_current # Any calculation of fields?
         
+        # Multi-junction:
+        self.Pj_from_current = Pj_from_current
+        if Pj_from_current:
+            print_color(' Setup: ' + self.setup.name)
+            self.PJ_multi_sol = {} # this is where the result will go 
+            
         if seams is not None:
             self.seams = seams
             data['seams'] = seams
@@ -356,6 +387,7 @@ class Bbq(object):
         if dielectrics is not None:
             self.dielectrics = dielectrics
             data['dielectrics'] = dielectrics
+        
         
         # A variation is a combination of project/design 
         # variables in an optimetric sweep
@@ -369,6 +401,11 @@ class Bbq(object):
         if modes is None:
             modes = range(self.nmodes)
         self.modes = modes
+        
+        ### Main loop
+        if self.latest_h5_path is not None and self.append_analysis:
+            shutil.copyfile(self.latest_h5_path, self.data_filename)
+        self.h5file = h5py.File(self.data_filename)
 
         for ii, variation in enumerate(variations):
             print 'variation : ' + variation + ' / ' + str(self.nvariations-1)
@@ -391,22 +428,24 @@ class Bbq(object):
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
             data.update(freqs_bare_dict)
 
-            print '---------------------- calc_fields ---------------'
-            print str(calc_fields)
-            print '--------------------'
+            if verbose < 2:
+                print '---------------------- calc_fields ---------------'
+                print str(calc_fields)
+                print '--------------------'
             if calc_fields:
                 self.pjs={}
 
                 for mode in modes:
-                    print 'Taking mode number ' + str(mode) + ' / ' + str(self.nmodes-1)
+                    PJ_mode_accumulator = []
+                    print ' Mode  \x1b[0;30;46m ' +  str(mode) + ' \x1b[0m / ' + str(self.nmodes-1)+'  calculating:'
                     self.solutions.set_mode(mode+1, 0)
                     self.fields = self.setup.get_fields()
                     self.omega = 2*np.pi*freqs_bare_vals[mode]
 
-                    print 'Caluclating U_H ...'
+                    print '   U_H ...'
                     self.U_H = self.calc_U_H(variation)
 
-                    print 'Calculating U_E ...'
+                    print '   U_E ...'
                     self.U_E = self.calc_U_E(variation)
 
                     if self.calculate_H:
@@ -418,6 +457,20 @@ class Bbq(object):
                         pj = self.get_p_j(mode)
                         self.pjs.update(pj)
                         data.update(pj)
+                    
+                    if self.Pj_from_current:
+                        def get_LJS(junc_LJ_var_name):
+                            ''''create an array of the LJs values in standard units'''
+                            LJs = []  
+                            for LJvar_nm in junc_LJ_var_name:
+                                lj = eval(data['_'+LJvar_nm][:-2]) #-2 for units; data is dict of variables and Qs and Freqs 
+                                lj *= 1e-9   # assuming in nH
+                                LJs += [lj]
+                            return LJs
+                        self.LJs    = get_LJS(junc_LJ_var_name)
+                        print '   I -> p_{mJ} ...'
+                        pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, method = pJ_method) # to be implemented
+                        PJ_mode_accumulator += [pJ_mj_series]
                         
                     # get Q seam
                     if seams is not None:
@@ -439,6 +492,10 @@ class Bbq(object):
                 # get Kerrs and chis
                 if self.calculate_H:
                     data.update(self.get_Hparams(freqs_bare_vals, self.pjs, lj))
+                
+                if self.Pj_from_current:
+                    self.PJ_multi_sol[variation] = pd.DataFrame(PJ_mode_accumulator, index = modes)
+                    #TODO: -- save to h5 file  below
                      
             self.data = data
             data_list.append(data)
@@ -453,6 +510,55 @@ class Bbq(object):
             self.bbq_analysis.plot_Hparams(modes=self.modes)
             self.bbq_analysis.print_Hparams(modes=self.modes)
         return
+        
+    def calc_current(self, fields, line ):
+        '''Function to calculate Current based on line. Not in use 
+            line = integration line between plates - name 
+        '''
+        self.design.Clear_Field_Clac_Stack()
+        comp = fields.Vector_H
+        exp  = comp.integrate_line_tangent(line)
+        I    = exp.evaluate(phase = 90)
+        self.design.Clear_Field_Clac_Stack()
+        return I
+        
+    def calc_avg_current_J_surf_mag(self, variation, junc_rect, junc_len):
+        ''' Peak current I_max for mdoe J in junction J  
+            The avg. is over the surface of the junction. I.e., spatial. '''
+        lv = self.get_lv(variation)
+        calc = CalcObject([],self.setup)
+        calc = calc.getQty("Jsurf").mag().integrate_surf(name = junc_rect)
+        I    = calc.evaluate(lv=lv) / junc_len #phase = 90
+        #self.design.Clear_Field_Clac_Stack()
+        return  I
+        
+    def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' ):
+        ''' Expected that you have specified the mode before calling this 
+            Expected to precalc U_H and U_E for mode, will retunr pandas series object 
+                junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
+                junc_len = [0.0001]   specify in SI units; i.e., meters
+                LJs   = [8e-09, 8e-09] SI units'''
+        dat = {'variation':variation,'U_E':U_E,'U_H':U_H, 'method':method, 'junc_rects':junc_rects}  
+        for i, junc_rect in enumerate(junc_rects):
+            print '     ' + junc_rect
+            if method is 'J_surf_mag':
+                I_peak = self.calc_avg_current_J_surf_mag(variation, junc_rect, junc_lens[i])                         
+            else: 
+                print 'Not yet implemented.'
+            if LJs is None:
+                print_color(' -----> ERROR: Why is LJs passed as None!?')
+            dat['I_'  +junc_rect] = I_peak
+            dat['LJs_'+junc_rect] = LJs[i] # mostly here for debug for now
+            dat['pJ_' +junc_rect] = LJs[i] * I_peak**2 / (2*U_E) 
+            
+        return pd.Series(dat) 
+
+def print_color(text, style = 0, fg=24, bg = 43):
+    '''style 0..8;   fg  30..38;  bg  40..48'''
+    format = ';'.join([str(style), str(fg), str(bg)])
+    s = '\x1b[%sm %s \x1b[0m' % (format, text)
+    print s
+    
 
 class BbqAnalysis(object):
     ''' defines an analysis object which loads and plots data from a h5 file
@@ -643,7 +749,7 @@ class BbqAnalysis(object):
         fig.savefig(self.data_filename[:-5]+'.jpg')
 
         return fig, ax
-            
+    
             
             
 #        for variable in swept_variables_names:
