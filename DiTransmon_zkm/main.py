@@ -14,7 +14,7 @@ from IPython.display import display
 #from scipy.constants import *
 #plt.close('all')
     
-if 0:    
+if 1:    
     proj_name    = r'2016_03_28_Di_Transmon from Antonio' 
     project_path = 'C:\\Users\\rslqulab\\Desktop\\zkm\\2016_qm_jumps\\DiTransmon_Asymetric\\'
     app, desktop, project = load_HFSS_project(proj_name, project_path)
@@ -23,7 +23,7 @@ if 0:
     bbp = bbq.Bbq(project, design, append_analysis=False, calculate_H=True)
 
 if 0:
-    junc_rects    = ['qubit1','qubit2']#['juncV','juncH']
+    junc_rects    = ['juncV','juncH'] # ['qubit1','qubit2']
     junc_LJ_names = ['LJ1', 'LJ2'];
     junc_lens     = [0.0001]*2 
     bbp.do_bbq(calculate_H = False,  plot_fig = False,
@@ -31,7 +31,7 @@ if 0:
     sol = bbp.PJ_multi_sol
 
 
-if 1:
+if 0:
     def comp_CHI_matrix(s):
         ''' s      = sol['0'];  CHI, PJ, Om, EJ, diff = comp_CHI_matrix(s)'''
         import  scipy;    Planck  = scipy.constants.Planck
@@ -56,26 +56,37 @@ if 1:
 #==============================================================================
 #     Plot results for sweep
 #==============================================================================
-    swpvar='join_w'    
+    swpvar='join_h'    
     RES = []; SWP = [];
     for key, s in sol.iteritems():
 #        bbp.
-        varz  = get_variables(bbp, variation=key)
+        varz  = bbp.get_variables(variation=key)
         SWP  += [ eval(varz['_'+swpvar][:-2]) ] 
         RES  += [ comp_CHI_matrix(s) ]
-    args = {'lw':0,'marker':'o','ms':5}
-    plt.plot(SWP, [r[0][0,1]for r in RES], label = '$\\chi_{DB}$', **args)
-    plt.plot(SWP, [r[0][0,2]for r in RES], label = '$\\chi_{DC}$', **args)
-    plt.plot(SWP, [r[0][1,2]for r in RES], label = '$\\chi_{BC}$', **args)
-    plt.ylim([0.01,10**2]); plt.xlabel(swpvar); plt.ylabel('$\\chi$ (MHz)'); plt.legend(loc = 0)
-    ax = plt.gca(); ax.set_yscale('log')
-    plt.figure()
-    plt.plot(SWP, [r[0][0,0]/2 for r in RES], label = '$\\alpha_{D}$', **args)
-    plt.plot(SWP, [r[0][1,1]/2 for r in RES], label = '$\\alpha_{B}$', **args)
-    plt.plot(SWP, [r[0][2,2]/2 for r in RES], label = '$\\alpha_{C}$', **args)
-    plt.ylim([100 +0.01,3.5*10**2]); plt.xlabel(swpvar); plt.ylabel('$\\alpha$ (MHz)'); plt.legend(loc = 0)
-    ax = plt.gca(); ax.set_yscale('linear')
+    import matplotlib.gridspec as gridspec;
     
+    fig = plt.figure(num = 1, figsize=(15,5)) 
+    gs1 = gridspec.GridSpec(1, 3, width_ratios=[1,1,1]); gs1.update(left=0.05, right=0.95)  # wspace=0.05
+    ax1 = plt.subplot(gs1[0]); ax2 = plt.subplot(gs1[1]); ax3 = plt.subplot(gs1[2])
+    
+    ax = ax1
+    args = {'lw':0,'marker':'o','ms':5}
+    ax.plot(SWP, [r[0][0,1]for r in RES], label = '$\\chi_{DB}$', **args)
+    ax.plot(SWP, [r[0][0,2]for r in RES], label = '$\\chi_{DC}$', **args)
+    ax.plot(SWP, [r[0][1,2]for r in RES], label = '$\\chi_{BC}$', **args)
+    ax.set_ylim([0.01,10**2]); ax.set_xlabel(swpvar); ax.set_ylabel('$\\chi$ (MHz)'); ax.legend(loc = 0)
+    ax.set_yscale('log')
+    ax = ax2
+    ax.plot(SWP, [r[0][0,0]/2 for r in RES], label = '$\\alpha_{D}$', **args)
+    ax.plot(SWP, [r[0][1,1]/2 for r in RES], label = '$\\alpha_{B}$', **args)
+    ax.plot(SWP, [r[0][2,2]/2 for r in RES], label = '$\\alpha_{C}$', **args)
+    ax.set_ylim([100 +0.01,3.5*10**2]); ax.set_xlabel(swpvar); ax.set_ylabel('$\\alpha$ (MHz)'); ax.legend(loc = 0)
+    ax.set_yscale('linear')
+    ax = ax3
+    ax.plot(SWP, [np.diag(r[2]) for r in RES],  **args)
+    ax.set_xlabel(swpvar); ax.set_ylabel('Freq. (GHz)');  ax.legend(['D','B','C'], loc= 0)
+    
+        
 if 0: 
     variation = '0';  pJ_method = 'J_surf_mag';
     #pJ_mj_series = bbp.calc_Pjs_from_I_for_mode(variation, bbp.U_H,bbp.U_E, bbp.LJs, junc_rects, junc_lens, method = pJ_method) # to be implemented          

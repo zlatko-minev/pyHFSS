@@ -195,7 +195,7 @@ class Bbq(object):
     def get_variables(self,variation=None):
         lv = self.get_lv(variation)
         variables={}
-        for ii in range(np.size(lv)/2):
+        for ii in range(len(lv)/2):
             variables['_'+lv[2*ii][:-2]]=lv[2*ii+1]
         self.variables = variables
         return variables
@@ -204,8 +204,7 @@ class Bbq(object):
         group = self.h5file.create_group(variation)
         for name, val in data.items():
             group[name] = val
-    
-    
+   
     def get_Qseam(self, seam, mode, variation):
         '''
         caculate the contribution to Q of a seam, by integrating the current in
