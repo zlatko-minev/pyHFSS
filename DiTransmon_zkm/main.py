@@ -23,7 +23,7 @@ if 0:
     bbp = bbq.Bbq(project, design, append_analysis=False, calculate_H=True)
 
 if 0:
-    junc_rects    = ['juncV','juncH']
+    junc_rects    = ['qubit1','qubit2']#['juncV','juncH']
     junc_LJ_names = ['LJ1', 'LJ2'];
     junc_lens     = [0.0001]*2 
     bbp.do_bbq(calculate_H = False,  plot_fig = False,
@@ -33,6 +33,7 @@ if 0:
 
 if 1:
     def comp_CHI_matrix(s):
+        ''' s      = sol['0'];  CHI, PJ, Om, EJ, diff = comp_CHI_matrix(s)'''
         import  scipy;    Planck  = scipy.constants.Planck
         LJs        = s.loc[0,s.keys().str.contains('LJs')] # LJ in nH
         EJs        = (bbq.fluxQ**2/LJs/Planck*10**-9).astype(np.float)        # EJs in GHz
@@ -44,15 +45,36 @@ if 1:
         # print '% diff b/w Jsurf_avg & global Pj:'; display(diff)
         if 1:# Renormalize: to sum to PJ_glb_sum; so that PJs.apply(sum, axis = 1) - PJ_glb_sum =0
             PJs = PJ_Jsu.divide(PJ_Jsu_sum, axis=0).mul(PJ_glb_sum,axis=0)
+        else: PJs = PJ_Jsu
         PJ    = np.mat(PJs.values)
         Om    = np.mat(np.diagflat(s['freq'].values)) 
         EJ    = np.mat(np.diagflat(EJs.values))
         CHI   = Om * PJ * EJ.I * PJ.T * Om * 1000 # MHz
         return CHI, PJ, Om, EJ, diff
-    s      = sol['0']
-    CHI, PJ, Om, EJ, diff = comp_CHI_matrix(s)
-    #TODO: quick 4th order BBQ 
     #TODO: phi_zpf -> full BBQ 
+    
+#==============================================================================
+#     Plot results for sweep
+#==============================================================================
+    swpvar='join_w'    
+    RES = []; SWP = [];
+    for key, s in sol.iteritems():
+#        bbp.
+        varz  = get_variables(bbp, variation=key)
+        SWP  += [ eval(varz['_'+swpvar][:-2]) ] 
+        RES  += [ comp_CHI_matrix(s) ]
+    args = {'lw':0,'marker':'o','ms':5}
+    plt.plot(SWP, [r[0][0,1]for r in RES], label = '$\\chi_{DB}$', **args)
+    plt.plot(SWP, [r[0][0,2]for r in RES], label = '$\\chi_{DC}$', **args)
+    plt.plot(SWP, [r[0][1,2]for r in RES], label = '$\\chi_{BC}$', **args)
+    plt.ylim([0.01,10**2]); plt.xlabel(swpvar); plt.ylabel('$\\chi$ (MHz)'); plt.legend(loc = 0)
+    ax = plt.gca(); ax.set_yscale('log')
+    plt.figure()
+    plt.plot(SWP, [r[0][0,0]/2 for r in RES], label = '$\\alpha_{D}$', **args)
+    plt.plot(SWP, [r[0][1,1]/2 for r in RES], label = '$\\alpha_{B}$', **args)
+    plt.plot(SWP, [r[0][2,2]/2 for r in RES], label = '$\\alpha_{C}$', **args)
+    plt.ylim([100 +0.01,3.5*10**2]); plt.xlabel(swpvar); plt.ylabel('$\\alpha$ (MHz)'); plt.legend(loc = 0)
+    ax = plt.gca(); ax.set_yscale('linear')
     
 if 0: 
     variation = '0';  pJ_method = 'J_surf_mag';
