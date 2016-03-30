@@ -55,7 +55,7 @@ class Bbq(object):
     def __init__(self, project, design, verbose=True, append_analysis=False, calculate_H=True):
         self.project = project
         self.design = design
-        self.setup = design.get_setup() # ?? what if there are multiple setups?
+        self.setup = design.get_setup() #TODO: Fix: how to chose b/w setups if multiple 
         self.fields = self.setup.get_fields()
         self.nmodes = int(self.setup.n_modes)
         self.listvariations = design._solutions.ListVariations(str(self.setup.solution_name))
@@ -341,7 +341,7 @@ class Bbq(object):
         return A.evaluate(lv=lv)
         
     def do_bbq(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calculate_H = None,
-               Pj_from_current = False, junc_rect = [], junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag',
+               Pj_from_current = False, junc_rect = [], junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag', 
                verbose = 2 ):
         """ 
             calculate_H:  
@@ -370,7 +370,7 @@ class Bbq(object):
         ### Process Input Params 
         # Single- junction & seam / dielectric data storage 
         data_list = [];  data = {} # List of data dictionaries. One dict per optimetric sweep.
-        if LJvariablename  is None: calculate_H      = None
+        if LJvariablename  is None: calculate_H      = False
         if calculate_H is not None: self.calculate_H = calculate_H
         calc_fields = (seams is not None) or (dielectrics is not None) or surface or self.calculate_H or Pj_from_current # Any calculation of fields?
         
@@ -433,20 +433,20 @@ class Bbq(object):
                 print str(calc_fields)
                 print '--------------------'
             if calc_fields:
-                self.pjs={}
+                self.pjs={}; PJ_mode_accumulator = []
 
                 for mode in modes:
-                    PJ_mode_accumulator = []
                     print ' Mode  \x1b[0;30;46m ' +  str(mode) + ' \x1b[0m / ' + str(self.nmodes-1)+'  calculating:'
                     self.solutions.set_mode(mode+1, 0)
                     self.fields = self.setup.get_fields()
                     self.omega = 2*np.pi*freqs_bare_vals[mode]
 
-                    print '   U_H ...'
+                    print_NoNewLine('   U_H ...')
                     self.U_H = self.calc_U_H(variation)
 
-                    print '   U_E ...'
+                    print_NoNewLine('   U_E   =>   ')
                     self.U_E = self.calc_U_E(variation)
+                    print(  "U_L = %.2f%%" %( (self.U_E -self.U_H )/(2*self.U_E)) )
 
                     if self.calculate_H:
                         # get LJ value
@@ -469,7 +469,7 @@ class Bbq(object):
                             return LJs
                         self.LJs    = get_LJS(junc_LJ_var_name)
                         print '   I -> p_{mJ} ...'
-                        pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, method = pJ_method) # to be implemented
+                        pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, method = pJ_method, freq = freqs_bare_vals[mode]*10**-9) # to be implemented
                         PJ_mode_accumulator += [pJ_mj_series]
                         
                     # get Q seam
@@ -492,9 +492,12 @@ class Bbq(object):
                 # get Kerrs and chis
                 if self.calculate_H:
                     data.update(self.get_Hparams(freqs_bare_vals, self.pjs, lj))
-                
+                    
                 if self.Pj_from_current:
                     self.PJ_multi_sol[variation] = pd.DataFrame(PJ_mode_accumulator, index = modes)
+                    if verbose<3:   # print chi matrix 
+                        from IPython.display import display      
+                        s  = self.PJ_multi_sol[variation];  display(s.loc[:,s.keys().str.contains('pJ')] )
                     #TODO: -- save to h5 file  below
                      
             self.data = data
@@ -525,14 +528,15 @@ class Bbq(object):
     def calc_avg_current_J_surf_mag(self, variation, junc_rect, junc_len):
         ''' Peak current I_max for mdoe J in junction J  
             The avg. is over the surface of the junction. I.e., spatial. '''
-        lv = self.get_lv(variation)
+        lv   = self.get_lv(variation)
         calc = CalcObject([],self.setup)
         calc = calc.getQty("Jsurf").mag().integrate_surf(name = junc_rect)
         I    = calc.evaluate(lv=lv) / junc_len #phase = 90
         #self.design.Clear_Field_Clac_Stack()
         return  I
         
-    def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' ):
+    def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' ,
+                                 freq = None):
         ''' Expected that you have specified the mode before calling this 
             Expected to precalc U_H and U_E for mode, will retunr pandas series object 
                 junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
@@ -540,18 +544,23 @@ class Bbq(object):
                 LJs   = [8e-09, 8e-09] SI units'''
         dat = {'variation':variation,'U_E':U_E,'U_H':U_H, 'method':method, 'junc_rects':junc_rects}  
         for i, junc_rect in enumerate(junc_rects):
-            print '     ' + junc_rect
+            print_NoNewLine('     ' + junc_rect)
             if method is 'J_surf_mag':
                 I_peak = self.calc_avg_current_J_surf_mag(variation, junc_rect, junc_lens[i])                         
             else: 
                 print 'Not yet implemented.'
             if LJs is None:
                 print_color(' -----> ERROR: Why is LJs passed as None!?')
-            dat['I_'  +junc_rect] = I_peak
+            dat['freq']           = freq   # preferrably in GHz
+            dat['I_'  +junc_rect] = I_peak # stores the phase information as well
             dat['LJs_'+junc_rect] = LJs[i] # mostly here for debug for now
             dat['pJ_' +junc_rect] = LJs[i] * I_peak**2 / (2*U_E) 
+            print '  %.2e' %(dat['pJ_' +junc_rect])
             
         return pd.Series(dat) 
+
+def print_NoNewLine(text):
+    print(text),
 
 def print_color(text, style = 0, fg=24, bg = 43):
     '''style 0..8;   fg  30..38;  bg  40..48'''

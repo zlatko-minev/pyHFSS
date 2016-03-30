@@ -74,3 +74,34 @@ HFSS refuses to close
 If your script terminates improperly, this can happen. pyHFSS tries to
 catch termination events and handle them. Your safety should be
 guaranteed however, if you call `hfss.release()` when you have finished
+
+Requires
+---------------------
+
+pint     - pip install pint
+pandas   - conda install pandas
+
+do_BBQ:
+---------------------
+    calculate_H:  
+        True: 1 junction method of Pj calculation based on U_H-U_E global. 
+        
+    Pj_from_current:
+        Multi-junction calculation of energy participation ratio matrix based on <I_J>. Current is integrated average of J_surf by default: (zkm 3/29/16)
+        Will calculate the Pj matrix for the selected modes for the given junctions junc_rect array & length of juuncs
+        
+        junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
+        junc_len = [0.0001]   specify in SI units; i.e., meters
+        junc_LJ_var_name = ['LJ1', 'LJ2']
+        pJ_method = 'J_surf_mag'   - currently only 1 implemented - takes the avg. Jsurf over the rect. Make sure you have seeded lots of tets here. i recommend starting with 4 across smallest dimension.
+
+        Assumptions:
+            Low dissipation (high-Q). 
+            Right now, we assume that there are no lumped capcitors to simply calculations. Not required. 
+            We assume that there are only lumped inductors, so that U_tot = U_E+U_H+U_L    and U_C =0, so that U_tot = 2*U_E;
+        Results in:
+            self.PJ_multi_sol - a Pandas DataFrame of all the information
+    
+    Other parameters:
+        seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
+        variations = ['0', '1']
