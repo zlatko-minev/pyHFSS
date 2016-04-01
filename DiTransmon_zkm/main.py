@@ -22,7 +22,7 @@ if 1:
     
     bbp = bbq.Bbq(project, design, append_analysis=False, calculate_H=True)
 
-if 0:
+if 1:
     junc_rects    = ['juncV','juncH'] # ['qubit1','qubit2']
     junc_LJ_names = ['LJ1', 'LJ2'];
     junc_lens     = [0.0001]*2 
@@ -31,7 +31,7 @@ if 0:
     sol = bbp.PJ_multi_sol
 
 
-if 0:
+if 1:
     def comp_CHI_matrix(s):
         ''' s      = sol['0'];  CHI, PJ, Om, EJ, diff = comp_CHI_matrix(s)'''
         import  scipy;    Planck  = scipy.constants.Planck
@@ -51,12 +51,19 @@ if 0:
         EJ    = np.mat(np.diagflat(EJs.values))
         CHI   = Om * PJ * EJ.I * PJ.T * Om * 1000 # MHz
         return CHI, PJ, Om, EJ, diff
+    s      = sol['0'];  CHI, PJ, Om, EJ, diff = comp_CHI_matrix(s)
+    display(CHI)
+    freqs = np.diag(Om)
+    print "%.0f  %.1f %.2f  MHz  -- BD BC DC chi" %(CHI[0,1], CHI[1,2],CHI[0,2])
+    print "%.2f %.2f %.2f GHz" %(freqs[0],freqs[1],freqs[2])
+    print "%.0f %.0f     MHz   - alpha" %(CHI[0,0]/2,CHI[1,1]/2)
     #TODO: phi_zpf -> full BBQ 
+    # bbp.get_variables(variation='0')
     
 #==============================================================================
 #     Plot results for sweep
 #==============================================================================
-    swpvar='join_h'    
+    swpvar='join_w'    
     RES = []; SWP = [];
     for key, s in sol.iteritems():
 #        bbp.
@@ -85,8 +92,30 @@ if 0:
     ax = ax3
     ax.plot(SWP, [np.diag(r[2]) for r in RES],  **args)
     ax.set_xlabel(swpvar); ax.set_ylabel('Freq. (GHz)');  ax.legend(['D','B','C'], loc= 0)
-    
         
+#%%
+    fig = plt.figure(num = 2, figsize=(15,5)) 
+    gs1 = gridspec.GridSpec(2, 3, width_ratios=[1,1,1], height_ratios=[5,1]); gs1.update(left=0.05, right=0.95)  # wspace=0.05
+    ax1 = plt.subplot(gs1[0,0]); ax2 = plt.subplot(gs1[0,1]); ax3 = plt.subplot(gs1[0,2])
+    ax = ax1
+    ax.plot(SWP, [r[1][0,0]for r in RES], label = '$P_{DH}$', **args)
+    ax.plot(SWP, [r[1][0,1]for r in RES], label = '$P_{BV}$', **args)
+    ax.set_xlabel(swpvar); ax.set_ylabel('Participation'); ax.legend(loc = 0)
+    ax = ax2
+    ax.plot(SWP, [r[1][0,1]for r in RES], label = '$P_{DV}$', **args)
+    ax.plot(SWP, [r[1][1,0]for r in RES], label = '$P_{BH}$', **args)
+    ax.set_xlabel(swpvar); ax.set_ylabel('Participation'); ax.legend(loc = 0)
+    ax = ax3
+    ax.plot(SWP, [r[1][2,0]for r in RES], label = '$P_{CH}$', **args)
+    ax.plot(SWP, [r[1][2,1]for r in RES], label = '$P_{CV}$', **args)
+    ax.set_yscale('log'); ax.set_xlabel(swpvar); ax.set_ylabel('Participation'); ax.legend(loc = 0)
+#%%    
+    ax   = plt.subplot(gs1[1,0]);
+    chiDC = np.array([r[0][0,2]for r in RES])
+    chiDB = np.array([r[0][0,1]for r in RES])
+    #print_color("chiDB/chiDC ratios:"); print  chiDB/chiDC
+    ax.plot(SWP, chiDB/chiDC, **args); ax.locator_params(nbins=4); ax.grid(); ax.set_ylabel('$\\chi_{DB}/\\chi_{DC}$')
+#%%
 if 0: 
     variation = '0';  pJ_method = 'J_surf_mag';
     #pJ_mj_series = bbp.calc_Pjs_from_I_for_mode(variation, bbp.U_H,bbp.U_E, bbp.LJs, junc_rects, junc_lens, method = pJ_method) # to be implemented          
