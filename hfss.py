@@ -610,6 +610,7 @@ class HfssSetup(HfssPropertyObject):
         return numpy.loadtxt(fn)
 
     def get_mesh_stats(self, variation=""):
+        #TODO: seems to be borken in 2016. todo fix
         fn = tempfile.mktemp()
         self.parent._design.ExportMeshStats(self.name, variation, fn, False)
         return numpy.loadtxt(fn)
@@ -1157,9 +1158,7 @@ class CalcObject(COMWrapper):
             name = of line to integrate over '''
         self.stack = self.stack + [("EnterLine", name),
                                    ("CalcOp",    "Tangent"),
-                                   ("CalcOp",    "Dot")]#,
-                              #("EnterLine", name),
-                              #("CalcOp",   "Integrate")]
+                                   ("CalcOp",    "Dot")]
         return self.integrate_line(name)
 
     def integrate_surf(self, name="AllObjects"):

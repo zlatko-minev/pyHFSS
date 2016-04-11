@@ -340,7 +340,7 @@ class Bbq(object):
         return A.evaluate(lv=lv)
         
     def do_bbq(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calculate_H = None,
-               Pj_from_current = False, junc_rect = [], junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag', 
+               Pj_from_current = False, junc_rect = [], junc_lines = None, junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag', 
                verbose = 2 ):
         """ 
             calculate_H:  
@@ -350,10 +350,11 @@ class Bbq(object):
                 Multi-junction calculation of energy participation ratio matrix based on <I_J>. Current is integrated average of J_surf by default: (zkm 3/29/16)
                 Will calculate the Pj matrix for the selected modes for the given junctions junc_rect array & length of juuncs
                 
-                junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
-                junc_len = [0.0001]   specify in SI units; i.e., meters
+                junc_rect  = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
+                junc_lines = ['junc_line1', 'junc_line2'] used to define the current flow direction, arbitrary, doesnt really matter that much, just need a line there
+                junc_len   = [0.0001]                     lenght of junc = lenght of junc_line #TODO: could now get rid of this and use the line     [specify in SI units; i.e., meters]
                 junc_LJ_var_name = ['LJ1', 'LJ2']
-                pJ_method = 'J_surf_mag'   - currently only 1 implemented - takes the avg. Jsurf over the rect. Make sure you have seeded lots of tets here. i recommend starting with 4 across smallest dimension.
+                pJ_method  = 'J_surf_mag'   - takes the avg. Jsurf over the rect. Make sure you have seeded lots of tets here. i recommend starting with 4 across smallest dimension.
 
                 Assumptions:
                     Low dissipation (high-Q). 
@@ -468,7 +469,9 @@ class Bbq(object):
                             return LJs
                         self.LJs    = get_LJS(junc_LJ_var_name)
                         print '   I -> p_{mJ} ...'
-                        pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, method = pJ_method, freq = freqs_bare_vals[mode]*10**-9) # to be implemented
+                        pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, 
+                                                                     method = pJ_method, freq = freqs_bare_vals[mode]*10**-9,
+                                                                     calc_sign = junc_lines)
                         PJ_mode_accumulator += [pJ_mj_series]
                         
                     # get Q seam
@@ -496,7 +499,7 @@ class Bbq(object):
                     self.PJ_multi_sol[variation] = pd.DataFrame(PJ_mode_accumulator, index = modes)
                     if verbose<3:   # print chi matrix 
                         from IPython.display import display      
-                        s  = self.PJ_multi_sol[variation];  display(s.loc[:,s.keys().str.contains('pJ')] )
+                        s  = self.PJ_multi_sol[variation];  #display(s.loc[:,s.keys().str.contains('pJ')] )
                     #TODO: -- save to h5 file  below
                      
             self.data = data
@@ -533,29 +536,40 @@ class Bbq(object):
         I    = calc.evaluate(lv=lv) / junc_len #phase = 90
         #self.design.Clear_Field_Clac_Stack()
         return  I
+    
+    def calc_line_current(self, variation, junc_line_name):
+        lv   = self.get_lv(variation)
+        calc = CalcObject([],self.setup)
+        calc = calc.getQty("H").imag().integrate_line_tangent(name = junc_line_name)
+        #self.design.Clear_Field_Clac_Stack()
+        return calc.evaluate(lv=lv)
         
     def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' ,
-                                 freq = None):
+                                 freq = None, calc_sign = None):
         ''' Expected that you have specified the mode before calling this 
             Expected to precalc U_H and U_E for mode, will retunr pandas series object 
                 junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
-                junc_len = [0.0001]   specify in SI units; i.e., meters
-                LJs   = [8e-09, 8e-09] SI units'''
-        dat = {'variation':variation,'U_E':U_E,'U_H':U_H, 'method':method, 'junc_rects':junc_rects}  
+                junc_len  = [0.0001]   specify in SI units; i.e., meters
+                LJs       = [8e-09, 8e-09] SI units
+                calc_sign = ['junc_line1', 'junc_line2']    used to define sign of ZPF
+        '''
+        dat = {'variation':variation,'U_E':U_E,'U_H':U_H, 'method':method}   #'junc_rects':junc_rects
         for i, junc_rect in enumerate(junc_rects):
             print_NoNewLine('     ' + junc_rect)
             if method is 'J_surf_mag':
                 I_peak = self.calc_avg_current_J_surf_mag(variation, junc_rect, junc_lens[i])                         
             else: 
                 print 'Not yet implemented.'
-            if LJs is None:
-                print_color(' -----> ERROR: Why is LJs passed as None!?')
+            if LJs is None: print_color(' -----> ERROR: Why is LJs passed as None!?')
             dat['freq']           = freq   # preferrably in GHz
-            dat['I_'  +junc_rect] = I_peak # stores the phase information as well
+            #dat['I_'  +junc_rect] = I_peak # stores the phase information as well
             dat['LJs_'+junc_rect] = LJs[i] # mostly here for debug for now
             dat['pJ_' +junc_rect] = LJs[i] * I_peak**2 / (2*U_E) 
-            print '  %.2e' %(dat['pJ_' +junc_rect])
-            
+            if calc_sign is not None:
+                Idum = self.calc_line_current(variation, calc_sign[i])
+                dat['sign_'+junc_rect] = +1 if Idum > 0 else -1
+                print   '  %+.5f' %(dat['pJ_' +junc_rect] * dat['sign_'+junc_rect] )
+            else: print '  %0.5f' %(dat['pJ_' +junc_rect])
         return pd.Series(dat) 
 
 def print_NoNewLine(text):
