@@ -1,3 +1,14 @@
+Energy participation BBQ
+======
+Zlatko's eBBQ setup tips for Eigenmode simulation 
+1. Geometry & B.C. definitions:
+1A.  Define junction rectangles & boundary condition. E.g. rectangle name: juncV. Define the lenght of the junction and junction Lj by a local variable; e.g., junc_len and LJ_V.   It is good to keep the junc rectangle on the order of 50 x 100 um. 
+1B. Define junction line to define current flow direction (polyline). Make it a dmodel objecta and make sure it spans the length of the junction, so use the same variables to define it. Tip: Define an Object coordinate axis before you make the polyline, which is based on the junc rect (e.g., juncV); then define the polyline in the Object CS ( make sure to give the CS a proper name juncV_cs). Now, give the polyline a good name: E.g.,juncV_line.
+4. Meshing tips:
+4A. Lighly mesh the pads and junc rectangles with roughly 4 initial tets across the smallest dimension. 
+5. Simulation setup 
+5A. Advisable, not necessary to used mixed order solutions. 
+
 pyHFSS
 ======
 

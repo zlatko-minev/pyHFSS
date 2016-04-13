@@ -6,7 +6,7 @@ Created on Thu Sep 10 11:46:56 2015
 """
 
 from hfss import *
-from hfss import CalcObject
+from hfss import CalcObject, ureg
 import numpy as np
 import h5py
 import time
@@ -53,6 +53,7 @@ class Bbq(object):
     """
     
     def __init__(self, project, design, verbose=True, append_analysis=False, calculate_H=True):
+        '''  calculate_H is the single-jucntion method using UH-Ue '''
         self.project = project
         self.design = design
         self.setup = design.get_setup() #TODO: Fix: how to chose b/w setups if multiple 
@@ -152,7 +153,6 @@ class Bbq(object):
                 freqs_bare_dict['Q_'+str(m)] = freqs[m]/kappa_over_2pis[m]
         self.freqs_bare = freqs_bare_dict
         self.freqs_bare_vals = freqs_bare_vals
-        if self.verbose: print freqs_bare_dict
         return freqs_bare_dict, freqs_bare_vals
         
         
@@ -163,7 +163,7 @@ class Bbq(object):
             lv = self.nominalvariation
             lv = self.parse_listvariations(lv)
         else:
-            lv = self.listvariations[eval(variation)]
+            lv = self.listvariations[ ureg(variation) ]
             lv = self.parse_listvariations(lv)
         return lv
     
@@ -172,7 +172,7 @@ class Bbq(object):
             lv = self.nominalvariation
             #lv = self.parse_listvariations_EM(lv)
         else:
-            lv = self.listvariations[eval(variation)]
+            lv = self.listvariations[ ureg(variation) ]
             #lv = self.parse_listvariations_EM(lv)
         return str(lv)
     
@@ -232,7 +232,7 @@ class Bbq(object):
         self.omega = 2*np.pi*freqs_bare_vals[mode]
         print variation
         print type(variation)
-        print eval(variation)
+        print ureg(variation)
         self.U_H = self.calc_U_H(variation)
         lv = self.get_lv(variation)
         Qseamsweep = []
@@ -339,7 +339,7 @@ class Bbq(object):
         A=A.integrate_vol(name=volume)
         return A.evaluate(lv=lv)
         
-    def do_bbq(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calculate_H = None,
+    def do_eBBQ(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calculate_H = None,
                Pj_from_current = False, junc_rect = [], junc_lines = None, junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag', 
                verbose = 2 ):
         """ 
@@ -387,7 +387,7 @@ class Bbq(object):
         if dielectrics is not None:
             self.dielectrics = dielectrics
             data['dielectrics'] = dielectrics
-        
+            
         
         # A variation is a combination of project/design 
         # variables in an optimetric sweep
@@ -402,33 +402,30 @@ class Bbq(object):
             modes = range(self.nmodes)
         self.modes = modes
         
-        ### Main loop
+        ### Main loop ###
         if self.latest_h5_path is not None and self.append_analysis:
             shutil.copyfile(self.latest_h5_path, self.data_filename)
         self.h5file = h5py.File(self.data_filename)
 
         for ii, variation in enumerate(variations):
-            print 'variation : ' + variation + ' / ' + str(self.nvariations-1)
+
+            print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1) ,bg = 44, newline = False )
             self.lv = self.get_lv(variation)
             
-
             if variation in self.h5file.keys() and self.append_analysis:
-                print 'variation previously analyzed ...'
+                print_NoNewLine('  previously analyzed ...\n')
                 continue
-            print 'variation ' + variation + ' NOT analyzed'
+            print_NoNewLine( ' NOT analyzed\n' )
             time.sleep(1)
 
-            #return
-            # get variable values (e.g $pad_length etc.)
-            data.update(self.get_variables(variation=variation))
-
+            data.update(self.get_variables(variation=variation))                # get variable values (e.g $pad_length etc.
             data['nmodes'] = self.nmodes
 
-            # get bare freqs from HFSS
-            freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)
+            freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)   # get bare freqs from HFSS
             data.update(freqs_bare_dict)
 
             if verbose < 2:
+                if self.verbose: print freqs_bare_dict
                 print '---------------------- calc_fields ---------------'
                 print str(calc_fields)
                 print '--------------------'
@@ -441,19 +438,12 @@ class Bbq(object):
                     self.fields = self.setup.get_fields()
                     self.omega = 2*np.pi*freqs_bare_vals[mode]
 
-                    print_NoNewLine('   U_H ...')
-                    self.U_H = self.calc_U_H(variation)
+                    print_NoNewLine('   U_H ...');     self.U_H = self.calc_U_H(variation)
+                    print_NoNewLine('   U_E');         self.U_E = self.calc_U_E(variation)
+                    print(  "   =>   U_L = %.3f%%" %( (self.U_E - self.U_H )/(2*self.U_E)) )
 
-                    print_NoNewLine('   U_E   =>   ')
-                    self.U_E = self.calc_U_E(variation)
-                    print(  "U_L = %.2f%%" %( (self.U_E -self.U_H )/(2*self.U_E)) )
-
-                    if self.calculate_H:
-                        # get LJ value
-                        lj = eval(data['_'+LJvariablename][:-2])
-                        lj *= 1e-9
-                        
-                        #calculate participation ratio for each mode for this variation
+                    if self.calculate_H:  # Single-junction method 
+                        lj = ureg.Quantity(data['_'+LJvariablename]).to_base_units().m                        
                         pj = self.get_p_j(mode)
                         self.pjs.update(pj)
                         data.update(pj)
@@ -463,15 +453,14 @@ class Bbq(object):
                             ''''create an array of the LJs values in standard units'''
                             LJs = []  
                             for LJvar_nm in junc_LJ_var_name:
-                                lj = eval(data['_'+LJvar_nm][:-2]) #-2 for units; data is dict of variables and Qs and Freqs 
-                                lj *= 1e-9   # assuming in nH
+                                lj = ureg.Quantity(data['_'+LJvar_nm]).to_base_units().m  
                                 LJs += [lj]
                             return LJs
                         self.LJs    = get_LJS(junc_LJ_var_name)
                         print '   I -> p_{mJ} ...'
                         pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, 
                                                                      method = pJ_method, freq = freqs_bare_vals[mode]*10**-9,
-                                                                     calc_sign = junc_lines)
+                                                                     calc_sign = junc_lines, modeQ = freqs_bare_dict['Q_'+str(mode)])
                         PJ_mode_accumulator += [pJ_mj_series]
                         
                     # get Q seam
@@ -497,9 +486,6 @@ class Bbq(object):
                     
                 if self.Pj_from_current:
                     self.PJ_multi_sol[variation] = pd.DataFrame(PJ_mode_accumulator, index = modes)
-                    if verbose<3:   # print chi matrix 
-                        from IPython.display import display      
-                        s  = self.PJ_multi_sol[variation];  #display(s.loc[:,s.keys().str.contains('pJ')] )
                     #TODO: -- save to h5 file  below
                      
             self.data = data
@@ -544,7 +530,7 @@ class Bbq(object):
         #self.design.Clear_Field_Clac_Stack()
         return calc.evaluate(lv=lv)
         
-    def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' ,
+    def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' , modeQ = 0.,
                                  freq = None, calc_sign = None):
         ''' Expected that you have specified the mode before calling this 
             Expected to precalc U_H and U_E for mode, will retunr pandas series object 
@@ -552,8 +538,10 @@ class Bbq(object):
                 junc_len  = [0.0001]   specify in SI units; i.e., meters
                 LJs       = [8e-09, 8e-09] SI units
                 calc_sign = ['junc_line1', 'junc_line2']    used to define sign of ZPF
+            Potential errors:  If you dont have a line or rect by the right name you will prob get an erorr o the type:
+                com_error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024365), None)
         '''
-        dat = {'variation':variation,'U_E':U_E,'U_H':U_H, 'method':method}   #'junc_rects':junc_rects
+        dat = {'variation':variation,'U_E':U_E,'U_H':U_H, 'method':method, 'modeQ': modeQ}   #TODO: add variaiton parameters in here;  also add some of these as properties cus they are same for many columsn;   such as 'junc_rects':junc_rects
         for i, junc_rect in enumerate(junc_rects):
             print_NoNewLine('     ' + junc_rect)
             if method is 'J_surf_mag':
@@ -575,11 +563,12 @@ class Bbq(object):
 def print_NoNewLine(text):
     print(text),
 
-def print_color(text, style = 0, fg=24, bg = 43):
+def print_color(text, style = 0, fg=24, bg = 43, newline = True):
     '''style 0..8;   fg  30..38;  bg  40..48'''
     format = ';'.join([str(style), str(fg), str(bg)])
     s = '\x1b[%sm %s \x1b[0m' % (format, text)
-    print s
+    if newline: print s 
+    else: print s,
     
 
 class BbqAnalysis(object):

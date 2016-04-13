@@ -10,11 +10,11 @@ import signal
 import pythoncom
 import time
 from sympy.parsing import sympy_parser
-from pint import UnitRegistry
+from pint import UnitRegistry # units 
 from win32com.client import Dispatch, CDispatch
 
 ureg = UnitRegistry()
-Q = ureg.Quantity
+Q    = ureg.Quantity
 
 BASIS_ORDER = {"Zero Order": 0,
                "First Order": 1,
