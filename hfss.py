@@ -10,11 +10,11 @@ import signal
 import pythoncom
 import time
 from sympy.parsing import sympy_parser
-from pint import UnitRegistry
+from pint import UnitRegistry # units 
 from win32com.client import Dispatch, CDispatch
 
 ureg = UnitRegistry()
-Q = ureg.Quantity
+Q    = ureg.Quantity
 
 BASIS_ORDER = {"Zero Order": 0,
                "First Order": 1,
@@ -154,9 +154,11 @@ class HfssApp(COMWrapper):
     def __init__(self):
         super(HfssApp, self).__init__()
         self._app = Dispatch('AnsoftHfss.HfssScriptInterface')
-
+        # in v2016 the main object is 'Ansoft.ElectronicsDesktop'
+            
     def get_app_desktop(self):
         return HfssDesktop(self, self._app.GetAppDesktop())
+        # in v2016, there is also getApp - which can be called with HFSS
 
 class HfssDesktop(COMWrapper):
     def __init__(self, app, desktop):
@@ -190,6 +192,7 @@ class HfssDesktop(COMWrapper):
         return HfssProject(self, self._desktop.NewProject())
 
     def open_project(self, path):
+        ''' returns error if already open '''
         return HfssProject(self, self._desktop.OpenProject(path))
 
     def set_active_project(self, name):
@@ -310,6 +313,10 @@ class HfssProject(COMWrapper):
 
     def new_em_design(self, name):
         return self.new_design(name, "Eigenmode")
+        
+    @property  # v2016
+    def name(self):
+        return self._project.GetName()
 
 
 class HfssDesign(COMWrapper):
@@ -603,6 +610,7 @@ class HfssSetup(HfssPropertyObject):
         return numpy.loadtxt(fn)
 
     def get_mesh_stats(self, variation=""):
+        #TODO: seems to be borken in 2016. todo fix
         fn = tempfile.mktemp()
         self.parent._design.ExportMeshStats(self.name, variation, fn, False)
         return numpy.loadtxt(fn)
@@ -1108,6 +1116,9 @@ class CalcObject(COMWrapper):
         
     def __mag__(self):
         return self._unary_op("Mag")
+    
+    def mag(self):
+        return self._unary_op("Mag")
         
     def conj(self):
         return self._unary_op("Conj") # make this right
@@ -1147,9 +1158,7 @@ class CalcObject(COMWrapper):
             name = of line to integrate over '''
         self.stack = self.stack + [("EnterLine", name),
                                    ("CalcOp",    "Tangent"),
-                                   ("CalcOp",    "Dot")]#,
-                              #("EnterLine", name),
-                              #("CalcOp",   "Integrate")]
+                                   ("CalcOp",    "Dot")]
         return self.integrate_line(name)
 
     def integrate_surf(self, name="AllObjects"):
@@ -1239,4 +1248,21 @@ def get_report_arrays(name):
     d = get_active_design()
     r = HfssReport(d, name)
     return r.get_arrays()
+    
+def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  #2016 version 
+    ''' proj_name == None => get active. 
+        (make sure 2 run as admin) '''
+    project_path +=  proj_name + extension
+    app     = HfssApp()
+    desktop = app.get_app_desktop()
+    if proj_name is not None:
+        if proj_name in desktop.get_project_names():
+            desktop.set_active_project(proj_name)    
+            project = desktop.get_active_project()
+        else:
+            project = desktop.open_project(project_path) 
+    else: 
+        project = desktop.get_active_project()
+    return app, desktop, project
+    
 
