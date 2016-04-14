@@ -6,7 +6,7 @@ import hfss;   import bbqNumericalDiagonalization; import pandas as pd
 from hfss import CalcObject, ureg
 from hfss import load_HFSS_project
 import bbq, matplotlib.pyplot as plt, numpy as np;  from bbq import print_color, divide_diagonal_by_2, print_matrix
-from IPython.display import display 
+from IPython.display import display # test change
 
     
 if 1:    
