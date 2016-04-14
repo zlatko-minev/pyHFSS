@@ -107,6 +107,7 @@ class Bbq(object):
         
     def setup_data(self):
         data_dir = root_dir + '/' + self.project.name + '/' + self.design.name
+        print data_dir
         if not os.path.isdir(data_dir):
             os.makedirs(data_dir)
         self.data_dir = data_dir
@@ -274,8 +275,16 @@ class Bbq(object):
         lv = self.get_lv(variation)
         Qsurf = {}
         print 'Calculating Qsurface for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')'
-        A = self.fields.Mag_E**2
-        A = A.integrate_surf(name='AllObjects')
+#        A = self.fields.Mag_E**2
+#        A = A.integrate_vol(name='AllObjects')
+#        U_surf = A.evaluate(lv=lv)
+        calcobject=CalcObject([],self.setup)
+        vecE=calcobject.getQty("E")
+        A=vecE
+        B=vecE.conj()
+        A=A.dot(B)
+        A=A.real()
+        A=A.integrate_surf(name='AllObjects')
         U_surf = A.evaluate(lv=lv)
         U_surf *= th*epsilon_0*eps_r
         p_surf = U_surf/self.U_E
@@ -466,8 +475,8 @@ class Bbq(object):
                     # get Q seam
                     if seams is not None:
                         for seam in seams:
-                             Qseam = self.get_Qseam(seam,mode,variation)
-                             data.update(Qseam)
+                            Qseam = self.get_Qseam(seam,mode,variation)
+                            data.update(Qseam)
                     
                     # get Q dielectric
                     if dielectrics is not None:
@@ -477,6 +486,8 @@ class Bbq(object):
                     
                     # get Q surface
                     if surface is True:
+                        print variation
+                        print type(variation)
                         Qsurface = self.get_Qsurface(mode, variation)
                         data.update(Qsurface)
 
