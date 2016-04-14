@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Sep 10 11:46:56 2015
-
-@author: Zaki
-"""
-
 from hfss import *
 from hfss import CalcObject, ureg
 import numpy as np
@@ -44,6 +37,29 @@ def deprecated(func):
     newFunc.__dict__.update(func.__dict__)
     return newFunc
 
+
+def print_matrix(M, frmt = "{:7.2f}", append_row = ""):
+    M = np.mat(M)
+    for row in np.array(M.tolist()):
+        print ' ',
+        for chi in row:
+            print frmt.format(chi),
+        print append_row+"\n",
+        
+def divide_diagonal_by_2(CHI0):
+    CHI = CHI0.copy();
+    CHI[np.diag_indices_from(CHI)] /= 2
+    return CHI;
+    
+def print_NoNewLine(text):
+    print(text),
+
+def print_color(text, style = 0, fg=24, bg = 43, newline = True):
+    '''style 0..8;   fg  30..38;  bg  40..48'''
+    format = ';'.join([str(style), str(fg), str(bg)])
+    s = '\x1b[%sm %s \x1b[0m' % (format, text)
+    if newline: print s 
+    else: print s,
 
 
 class Bbq(object):
@@ -570,16 +586,6 @@ class Bbq(object):
                 print   '  %+.5f' %(dat['pJ_' +junc_rect] * dat['sign_'+junc_rect] )
             else: print '  %0.5f' %(dat['pJ_' +junc_rect])
         return pd.Series(dat) 
-
-def print_NoNewLine(text):
-    print(text),
-
-def print_color(text, style = 0, fg=24, bg = 43, newline = True):
-    '''style 0..8;   fg  30..38;  bg  40..48'''
-    format = ';'.join([str(style), str(fg), str(bg)])
-    s = '\x1b[%sm %s \x1b[0m' % (format, text)
-    if newline: print s 
-    else: print s,
     
 
 class BbqAnalysis(object):

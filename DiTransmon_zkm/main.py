@@ -1,32 +1,13 @@
-# -*- coding: utf-8 -*-
-"""
-see http://arrc.ou.edu/~cody/hfsslib/hfss_examples/#
-"""
 #%%
 import sys;  IMP_PATH = r'C:\\Users\\rslqulab\\Desktop\\zkm\\pyHFSS\\';
 if ~(IMP_PATH in sys.path): sys.path.append(IMP_PATH);
     
-import hfss;   import bbqNumericalDiagonalization;
+import hfss;   import bbqNumericalDiagonalization; import pandas as pd
 from hfss import CalcObject, ureg
 from hfss import load_HFSS_project
-import bbq, matplotlib.pyplot as plt, numpy as np;  from bbq import print_color
-from IPython.display import display 
+import bbq, matplotlib.pyplot as plt, numpy as np;  from bbq import print_color, divide_diagonal_by_2, print_matrix
+from IPython.display import display # test change
 
-#from pint import UnitRegistry  ureg = UnitRegistry()  # handle units 
-
-#from scipy.constants import *
-#plt.close('all')
-def print_matrix(M, frmt = "{:7.2f}", append_row = ""):
-    M = np.mat(M)
-    for row in np.array(M.tolist()):
-        print ' ',
-        for chi in row:
-            print frmt.format(chi),
-        print append_row+"\n",
-def divide_diagonal_by_2(CHI0):
-    CHI = CHI0.copy();
-    CHI[np.diag_indices_from(CHI)] /= 2
-    return CHI;
     
 if 1:    
     proj_name    = r'2016_03_28_Di_Transmon from Antonio' 
@@ -94,23 +75,24 @@ def eBBQ_participation2_H_params(s, cos_trunc = None, fock_trunc = None):
         f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc)                
     else: CHI_ND, fzpfs = None, None
     return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs
-
+#%%
 if 1:
-    s     = sol['0'];  
-    cos_trunc = 6; fock_trunc  = 7;
+    variation = '0'; s           = sol[variation];  
+    cos_trunc = 6;   fock_trunc  = 7;
     CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
         eBBQ_participation2_H_params(s, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
     print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
     #print '\nCHI_O1=\t PT. [alpha diag]'; print_matrix(CHI_O1,append_row ="MHz" )
     print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
     print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
-    print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))        
-    # bbp.get_variables(variation='0')
+    print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
+    varz = bbp.get_variables(variation=variation)     
+    print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH'] })
 #%%==============================================================================
 #     Plot results for sweep
 #==============================================================================
 if 1:
-    swpvar='scaleV'    
+    swpvar='join_h'    
     RES = []; SWP = [];
     for key, s in sol.iteritems():
         varz  = bbp.get_variables(variation=key)
@@ -128,7 +110,7 @@ if 1:
     ax.plot(SWP, [r[ID][0,2]for r in RES], label = '$\\chi_{DC}$', **args)
     ax.plot(SWP, [r[ID][1,2]for r in RES], label = '$\\chi_{BC}$', **args)
     ax.set_ylim([0.01,10**2]); ax.set_xlabel(swpvar); ax.set_title('cross-Kerr'); ax.set_ylabel('$\\chi$ (MHz)'); ax.legend(loc = 0)
-    ax.set_yscale('log');      
+    ax.set_yscale('log');   ax.set_ylim(0.1,100)    
     ax1.axhspan(5.5,6.5, alpha =0.4, color= 'b')
     ax1.axhline(0.5, alpha =0.4, color= 'b')
     ax1.axhspan(85,150, alpha =0.4, color= 'b')
