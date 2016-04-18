@@ -8,7 +8,7 @@ from hfss import load_HFSS_project
 import bbq, matplotlib.pyplot as plt, numpy as np;  from bbq import print_color, divide_diagonal_by_2, print_matrix
 from IPython.display import display # test change
 
-    
+
 if 1:    
     proj_name    = r'2016_03_28_Di_Transmon from Antonio' 
     project_path = 'C:\\Users\\rslqulab\\Desktop\\zkm\\2016_qm_jumps\\DiTransmon_Asymetric\\'
@@ -87,12 +87,12 @@ if 1:
     print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
     print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
     varz = bbp.get_variables(variation=variation)     
-    print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH'] })
+    print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1'] })
 #%%==============================================================================
 #     Plot results for sweep
 #==============================================================================
 if 1:
-    swpvar='join_h'    
+    swpvar='LJ1'    
     RES = []; SWP = [];
     for key, s in sol.iteritems():
         varz  = bbp.get_variables(variation=key)
@@ -152,6 +152,19 @@ if 1:
     #print_color("chiDB/chiDC ratios:"); print  chiDB/chiDC
     ax.plot(SWP, chiDB/chiDC, **args); ax.locator_params(nbins=4); ax.grid(); ax.set_ylabel('$\\chi_{DB}/\\chi_{DC}$')
     ax.set_xlabel(swpvar);
+    
+ #%%## plot the chis again     
+    fig.clf(3);   ID = 1;
+    fig, (ax7,ax8,ax9) = plt.subplots(3,1,sharex = True, num = 3, figsize=(6,7)) ; 
+
+    ax7.plot(SWP, [r[ID][0,1]for r in RES], label = '$\\chi_{DB}$', c = 'b', **args); ax7.set_ylabel('$\\chi_{DB}$ (MHz)');
+    ax9.plot(SWP, [r[ID][0,2]for r in RES], label = '$\\chi_{DC}$', c = 'g', **args); ax9.set_ylabel('$\\chi_{DC}$ (MHz)');
+    ax8.plot(SWP, [r[ID][1,2]for r in RES], label = '$\\chi_{BC}$', c = 'r', **args); ax8.set_ylabel('$\\chi_{BC}$ (MHz)');
+    ax9.set_xlabel(swpvar); ax7.set_title('cross-Kerr');   
+    #ax7.axhspan(85,150,  alpha =0.4, color= 'b')
+    ax8.axhspan(5.5,6.5, alpha =0.4, color= 'b')
+    ax9.axhline(0.5,     alpha =0.4, color= 'b')
+    fig.tight_layout()
 #%%
 if 0: 
     variation = '0';  pJ_method = 'J_surf_mag';

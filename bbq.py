@@ -468,7 +468,7 @@ class Bbq(object):
                     print(  "   =>   U_L = %.3f%%" %( (self.U_E - self.U_H )/(2*self.U_E)) )
 
                     if self.calculate_H:  # Single-junction method 
-                        lj = ureg.Quantity(data['_'+LJvariablename]).to_base_units().m                        
+                        lj = 1000*ureg.Quantity(data['_'+LJvariablename]).to_base_units().magnitude                        
                         pj = self.get_p_j(mode)
                         self.pjs.update(pj)
                         data.update(pj)
@@ -478,7 +478,7 @@ class Bbq(object):
                             ''''create an array of the LJs values in standard units'''
                             LJs = []  
                             for LJvar_nm in junc_LJ_var_name:
-                                lj = ureg.Quantity(data['_'+LJvar_nm]).to_base_units().m  
+                                lj = 1000*ureg.Quantity(data['_'+LJvar_nm]).to_base_units().magnitude  
                                 LJs += [lj]
                             return LJs
                         self.LJs    = get_LJS(junc_LJ_var_name)
