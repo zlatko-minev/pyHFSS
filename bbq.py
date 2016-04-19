@@ -1,10 +1,14 @@
 from hfss import *
-from hfss import CalcObject, ureg
+from hfss import CalcObject
 import time, os, shutil, matplotlib.pyplot as plt, numpy as np, pandas as pd
 from stat import S_ISREG, ST_CTIME, ST_MODE
 from pandas import HDFStore, Series, DataFrame
 from scipy.constants import *; from scipy.constants import hbar, e as e_el, epsilon_0, pi;  # not sure what else ened sto be imported, idellay we should get rid of all *
 from config_bbq      import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
+from pint import UnitRegistry; 
+
+ureg = UnitRegistry(system='mks')
+
 #import h5py
 
 #==============================================================================
@@ -82,10 +86,12 @@ class Bbq(object):
         self.solutions        = self.setup.get_solutions()
         self.verbose          = verbose
         self.append_analysis  = append_analysis
-        self.hfss_variables   = {}                                  # container for the list of varibles  
+        self.hfss_variables   = {}                             # container for eBBQ list of varibles  
+        self.sols             = {}                             # container for eBBQ solutions; could make a Panel
+        self.meta_data        = {}                             # container for eBBQ metadata
         
         self.setup_data()
-        if self.verbose: print 'Number of modes : ' + str(self.nmodes), '\nNumber of variations : ' + str(self.nvariations)
+        if self.verbose: print '       # Modes: ' + str(self.nmodes), '\n  # Variations: ' + str(self.nvariations)
         
         self.get_latest_h5()
         if self.latest_h5_path is not None and self.append_analysis:
@@ -231,7 +237,7 @@ class Bbq(object):
         yseam = int_j_2_val/self.U_H/self.omega
         Qseam['Qseam_'+seam+'_'+str(mode)] = gseam/yseam
         print 'Qseam_' + seam + '_' + str(mode) + str(' = ') + str(gseam/yseam)
-        return Qseam
+        return Series(Qseam)
 
     def get_Qseam_sweep(self, seam, mode, variation, variable, values, unit, pltresult=True):
         # values = ['5mm','6mm','7mm']
@@ -274,7 +280,7 @@ class Bbq(object):
         p_dielectric = U_dielectric/self.U_E
         Qdielectric['Qdielectric_'+dielectric+'_'+str(mode)] = 1/(p_dielectric*tan_delta_sapp)
         print 'p_dielectric'+'_'+dielectric+'_'+str(mode)+' = ' + str(p_dielectric)
-        return Qdielectric
+        return Series(Qdielectric)
 
     def get_Qsurface(self, mode, variation):
         '''
@@ -300,7 +306,7 @@ class Bbq(object):
         p_surf = U_surf/self.U_E
         Qsurf['Qsurf_'+str(mode)] = 1/(p_surf*tan_delta_surf)
         print 'p_surf'+'_'+str(mode)+' = ' + str(p_surf)
-        return Qsurf
+        return Series(Qsurf)
     
     def get_Hparams(self, freqs, pjs, lj):
         Hparams = {}
@@ -397,7 +403,7 @@ class Bbq(object):
             Potential errors:  If you dont have a line or rect by the right name you will prob get an erorr o the type:
                 com_error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024365), None)
         '''
-        dat = {'method':method} 
+        dat = {} 
         for i, junc_rect in enumerate(junc_rects):
             print_NoNewLine('     ' + junc_rect)
             if method is 'J_surf_mag':
@@ -415,8 +421,10 @@ class Bbq(object):
             else: print '  %0.5f' %(dat['pJ_' +junc_rect])
         return pd.Series(dat) 
         
-    def do_eBBQ(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calc_Hamiltonian_on_fly = False,
-               Pj_from_current = False, junc_rect = [], junc_lines = None, junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag'):
+    def do_eBBQ(self, 
+               Pj_from_current= True, junc_rect = [],  junc_lines = None,  junc_len = [],  junc_LJ_var_name = [], pJ_method =  'J_surf_mag',  calc_Hamiltonian_on_fly = False,
+               variations=None, plot_fig   = False,
+               seams    =None, dielectrics=None,      surface=False, modes=None):
         """ 
             calculate_H:  
                 True: 1 junction method of Pj calculation based on U_H-U_E global. 
@@ -445,48 +453,42 @@ class Bbq(object):
             A variation is a combination of project/design variables in an optimetric sweep
         """
 
-        self.Pj_from_current = Pj_from_current; data_list = [];  data = {} # List of data dictionaries. One dict per optimetric sweep.
+        self.Pj_from_current = Pj_from_current;  meta_data = {};  assert(type(junc_LJ_var_name) == list), "Please pass junc_LJ_var_name as a list "
         if Pj_from_current        :  print_color(' Setup: ' + self.setup.name); self.PJ_multi_sol = {} # this is where the result will go             
-        if seams       is not None:  self.seams       = seams;       data['seams'] = seams;    
-        if dielectrics is not None:  self.dielectrics = dielectrics; data['dielectrics'] = dielectrics;
+        if seams       is not None:  self.seams       = seams;       meta_data['seams']       = seams;    
+        if dielectrics is not None:  self.dielectrics = dielectrics; meta_data['dielectrics'] = dielectrics;
         if variations      is None:  variations = (['-1'] if self.listvariations == (u'',)  else [str(i) for i in range(self.nvariations)] )
         if modes           is None:  modes = range(self.nmodes)
         if self.latest_h5_path is not None and self.append_analysis:shutil.copyfile(self.latest_h5_path, self.data_filename);
-        self.h5file = pd.HDFStore(self.data_filename); hdf = self.h5file;
-        self.variations=variations;  self.modes = modes; self.njunc = len(junc_rect)
+        self.h5file     = hdf = pd.HDFStore(self.data_filename); 
+        self.variations = variations;  self.modes = modes; self.njunc = len(junc_rect)
+        meta_data['junc_rect'] = junc_rect; meta_data['junc_lines'] = junc_lines; meta_data['junc_len'] = junc_len; meta_data['junc_LJ_var_name'] = junc_LJ_var_name; meta_data['pJ_method'] = pJ_method;
 
         for ii, variation in enumerate(variations):
-            print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1) ,bg = 44, newline = False )
+            print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1), bg = 44, newline = False )
             self.lv = self.get_lv(variation)
             if (variation+'/hfss_variables') in hdf.keys() and self.append_analysis: print_NoNewLine('  previously analyzed ...\n');  \
                 continue;    
 
             print_NoNewLine( ' NOT analyzed\n' );  time.sleep(0.5)
-            hdf[variation+'/hfss_variables'] = self.hfss_variables[variation] \
+            hdf[variation+'/hfss_variables'] = self.hfss_variables[variation] = varz \
                                              = pd.Series(self.get_variables(variation=variation))
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)   # get bare freqs from HFSS
 
             self.pjs={}; var_sol_accum = [] 
             for mode in modes:
                 sol = Series({'freq' : freqs_bare_vals[mode]*10**-9, 'modeQ' : freqs_bare_dict['Q_'+str(mode)] })
+                self.omega  = 2*np.pi*freqs_bare_vals[mode] # this should really be passed as argument  to the functions rather than a property of the calss I would say 
                 print ' Mode  \x1b[0;30;46m ' +  str(mode) + ' \x1b[0m / ' + str(self.nmodes-1)+'  calculating:'
                 self.solutions.set_mode(mode+1, 0)
                 self.fields = self.setup.get_fields()
-                self.omega  = 2*np.pi*freqs_bare_vals[mode] # this should really be passed as argument  to the functions rather than a property of the calss I would say 
 
                 print_NoNewLine('   U_H ...');     sol['U_H'] = self.U_H = self.calc_U_H(variation)
                 print_NoNewLine('   U_E');         sol['U_E'] = self.U_E = self.calc_U_E(variation)
                 print(  "   =>   U_L = %.3f%%" %( (self.U_E - self.U_H )/(2*self.U_E)) )
                 
                 if self.Pj_from_current:
-                    def get_LJS(junc_LJ_var_name):
-                        ''''create an array of the LJs values in standard units'''
-                        LJs = []  
-                        for LJvar_nm in junc_LJ_var_name:
-                            lj = 1000*ureg.Quantity(data['_'+LJvar_nm]).to_base_units().magnitude  
-                            LJs += [lj]
-                        return LJs
-                    self.LJs    = get_LJS(junc_LJ_var_name)
+                    self.LJs    = [ ureg.Quantity(varz['_'+LJvar_nm]).to_base_units().magnitude  for LJvar_nm in junc_LJ_var_name]
                     print '   I -> p_{mJ} ...'
                     sol_PJ = self.calc_Pjs_from_I_for_mode(variation, self.U_H, self.U_E, self.LJs, junc_rect, junc_len, 
                                                                  method = pJ_method, freq = freqs_bare_vals[mode]*10**-9,
@@ -494,34 +496,30 @@ class Bbq(object):
                     sol = sol.append(sol_PJ)
                 
                 if self.njunc == 1:             # Single-junction method using global U_H and U_E; 
-                    lj  = 1000*ureg.Quantity(data['_'+LJvariablename]).to_base_units().magnitude                        
-                    pj1 = self.get_p_j(mode)
-                    self.pjs.update(pj1)        # convinience function for single junction case
-                    if self.Pj_from_current: sol['pj1'] = pj1
+                    assert(type(junc_LJ_var_name) == list and len(junc_LJ_var_name) == 1), "Please pass junc_LJ_var_name as array of 1 element for a single junction; e.g., junc_LJ_var_name = ['junc1']" 
+                    #lj  = 1E-3*ureg.Quantity(varz['_'+junc_LJ_var_name]).to_base_units().magnitude                        
+                    sol['pj1'] = self.get_p_j(mode)
+                    self.pjs.update(sol['pj1'])        # convinience function for single junction case
                     
-                if seams is not None:           # get Q seam
-                    for seam in seams:
-                        Qseam = self.get_Qseam(seam,mode,variation)
-                        sol = sol.append(self.get_Qseam(seam,mode,variation))
-                        
-                if dielectrics is not None:     # get Q dielectric
-                    for dielectric in dielectrics:
-                        Qdielectric = self.get_Qdielectric(dielectric, mode, variation)
-                        data.update(Qdielectric)                        
+                if seams is not None:           # get seam Q
+                    for seam in seams: sol = sol.append(self.get_Qseam(seam,mode,variation))
+
+                if dielectrics is not None:     # get Q dielectric      
+                    for dielectric in dielectrics: sol = sol.append(self.get_Qdielectric(dielectric, mode, variation))
                                
                 if surface is True:             # get Q surface                              
-                    if self.verbose: print variation; print type(variation);
-                    Qsurface = self.get_Qsurface(mode, variation)
-                    data.update(Qsurface) 
+                    sol = sol.append( self.get_Qsurface(mode, variation) )
                     
                 var_sol_accum +=[sol]
             
             #TODO: add metadata to the Dataframe & save it
             #      such as what are the junc_rect names and Lj values etc.  (e.g., http://stackoverflow.com/questions/29129095/save-additional-attributes-in-pandas-dataframe/29130146#29130146)
-            hdf[variation+'/hfss_variables'] = self.eBBQ_solution[variation]  \
+            hdf[variation+'/eBBQ_solution']  = self.sols[variation]  \
                                              = pd.DataFrame(var_sol_accum, index = modes)            
-            if self.calc_Hamiltonian_on_fly:  raise('Not implemented'); data.update(self.get_Hparams(freqs_bare_vals, self.pjs, lj))
-        
+            hdf[variation+'/meta_data']      = self.meta_data[variation]  \
+                                             = Series(meta_data)
+            if calc_Hamiltonian_on_fly:  raise('Not implemented'); #for 1 junct: self.get_Hparams(freqs_bare_vals, self.pjs, lj))
+            
         self.h5file.close()
         #TODO: to be implemented below
 #        self.bbq_analysis = BbqAnalysis(self.data_filename, variations=self.variations)
@@ -530,21 +528,40 @@ class Bbq(object):
 #            self.bbq_analysis.print_Hparams(modes=self.modes)
         return
     
-
+#%%
+from pandas import HDFStore
+hdf = HDFStore(bbp.data_filename, mode = 'r') 
+variations = []
+for key in hdf.keys():
+    if 'hfss_variables' in key:
+        variations += re.findall(r'\b\d+\b', key)
+#%%    
 class BbqAnalysis(object):
     ''' defines an analysis object which loads and plots data from a h5 file
     This data is obtained using e.g bbq.do_bbq
-    '''    
+
+    ''' 
     def __init__(self, data_filename, variations=None):
-        #TODO: needs to be updated to new standard; currently borken
+        #raise('not implemented')
         self.data_filename = data_filename
-        self.h5data = h5py.File(data_filename, 'r')
-    
-        if variations is None:
-            variations = self.h5data.keys()
-        self.variations = variations
-        
-        self.nmodes = self.h5data[self.variations[0]]['nmodes'].value      
+        with HDFStore(data_filename, mode = 'r') as hdf:  # = h5py.File(data_filename, 'r')        
+            # i think we should open & close the file here, i dont see why we need to keep it open & keep accessing it. It is small in memeory, just load it into the RAM.
+            # all the data will be stored in 3 objects.        
+            if variations is None:
+                import re
+                variations = []
+                for key in hdf.keys():
+                    if 'hfss_variables' in key:
+                        variations += re.findall(r'\b\d+\b', key)
+            self.variations     = variations
+            self.hfss_variables = {}
+            self.sols           = {}
+            self.meta_data      = {}
+            for variation in variations:
+                self.hfss_variables[variation] = hdf[variation+'/hfss_variables']
+                self.sols[variation]           = hdf[variation+'/eBBQ_solution']  
+                self.meta_data[variation]      = hdf[variation+'/meta_data']
+            self.nmodes         = self.sols[variations[0]].shape[0]      
         
     def get_swept_variables(self):
         #TODO: needs to be updated to new standard; currently borken
