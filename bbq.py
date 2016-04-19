@@ -2,7 +2,7 @@ from hfss import *
 from hfss import CalcObject, ureg
 import time, os, shutil, matplotlib.pyplot as plt, numpy as np, pandas as pd
 from stat import S_ISREG, ST_CTIME, ST_MODE
-from pandas import HDFStore
+from pandas import HDFStore, Series, DataFrame
 from scipy.constants import *; from scipy.constants import hbar, e as e_el, epsilon_0, pi;  # not sure what else ened sto be imported, idellay we should get rid of all *
 from config_bbq      import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
 #import h5py
@@ -82,6 +82,7 @@ class Bbq(object):
         self.solutions        = self.setup.get_solutions()
         self.verbose          = verbose
         self.append_analysis  = append_analysis
+        self.hfss_variables   = {}                                  # container for the list of varibles  
         
         self.setup_data()
         if self.verbose: print 'Number of modes : ' + str(self.nmodes), '\nNumber of variations : ' + str(self.nvariations)
@@ -147,7 +148,7 @@ class Bbq(object):
         pj = {}
         pj_val = (self.U_E-self.U_H)/(2*self.U_E)
         pj['pj_'+str(mode)] = np.abs(pj_val)
-        print 'p_j_' + str(mode) + ' = ' + str(pj_val)
+        print '    p_j_' + str(mode) + ' = ' + str(pj_val)
         return pj
     
     def get_freqs_bare(self, variation):
@@ -209,10 +210,11 @@ class Bbq(object):
         self.variables = variables
         return variables
     
-    def save_data(self, data, variation):
-        group = self.h5file.create_group(variation)
-        for name, val in data.items():
-            group[name] = val
+#    @deprecated # TODO: delete this 
+#    def save_data(self, data, variation):
+#        group = self.h5file.create_group(variation)
+#        for name, val in data.items():
+#            group[name] = val
    
     def get_Qseam(self, seam, mode, variation):
         '''
@@ -356,6 +358,63 @@ class Bbq(object):
         A=A.integrate_vol(name=volume)
         return A.evaluate(lv=lv)
         
+    def calc_current(self, fields, line ):
+        '''Function to calculate Current based on line. Not in use 
+            line = integration line between plates - name 
+        '''
+        self.design.Clear_Field_Clac_Stack()
+        comp = fields.Vector_H
+        exp  = comp.integrate_line_tangent(line)
+        I    = exp.evaluate(phase = 90)
+        self.design.Clear_Field_Clac_Stack()
+        return I
+        
+    def calc_avg_current_J_surf_mag(self, variation, junc_rect, junc_len):
+        ''' Peak current I_max for mdoe J in junction J  
+            The avg. is over the surface of the junction. I.e., spatial. '''
+        lv   = self.get_lv(variation)
+        calc = CalcObject([],self.setup)
+        calc = calc.getQty("Jsurf").mag().integrate_surf(name = junc_rect)
+        I    = calc.evaluate(lv=lv) / junc_len #phase = 90
+        #self.design.Clear_Field_Clac_Stack()
+        return  I
+    
+    def calc_line_current(self, variation, junc_line_name):
+        lv   = self.get_lv(variation)
+        calc = CalcObject([],self.setup)
+        calc = calc.getQty("H").imag().integrate_line_tangent(name = junc_line_name)
+        #self.design.Clear_Field_Clac_Stack()
+        return calc.evaluate(lv=lv)
+        
+    def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' , 
+                                 freq = None, calc_sign = None):
+        ''' Expected that you have specified the mode before calling this 
+            Expected to precalc U_H and U_E for mode, will retunr pandas series object 
+                junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
+                junc_len  = [0.0001]   specify in SI units; i.e., meters
+                LJs       = [8e-09, 8e-09] SI units
+                calc_sign = ['junc_line1', 'junc_line2']    used to define sign of ZPF
+            Potential errors:  If you dont have a line or rect by the right name you will prob get an erorr o the type:
+                com_error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024365), None)
+        '''
+        dat = {'method':method} 
+        for i, junc_rect in enumerate(junc_rects):
+            print_NoNewLine('     ' + junc_rect)
+            if method is 'J_surf_mag':
+                I_peak = self.calc_avg_current_J_surf_mag(variation, junc_rect, junc_lens[i])                         
+            else: 
+                print 'Not yet implemented.'
+            if LJs is None: print_color(' -----> ERROR: Why is LJs passed as None!?')
+            #dat['I_'  +junc_rect] = I_peak # stores the phase information as well
+            dat['LJs_'+junc_rect] = LJs[i] #TODO: move this to series proetery  mostly here for debug for now
+            dat['pJ_' +junc_rect] = LJs[i] * I_peak**2 / (2*U_E) 
+            if calc_sign is not None:
+                Idum = self.calc_line_current(variation, calc_sign[i])
+                dat['sign_'+junc_rect] = +1 if Idum > 0 else -1
+                print   '  %+.5f' %(dat['pJ_' +junc_rect] * dat['sign_'+junc_rect] )
+            else: print '  %0.5f' %(dat['pJ_' +junc_rect])
+        return pd.Series(dat) 
+        
     def do_eBBQ(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calc_Hamiltonian_on_fly = False,
                Pj_from_current = False, junc_rect = [], junc_lines = None, junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag'):
         """ 
@@ -392,40 +451,32 @@ class Bbq(object):
         if dielectrics is not None:  self.dielectrics = dielectrics; data['dielectrics'] = dielectrics;
         if variations      is None:  variations = (['-1'] if self.listvariations == (u'',)  else [str(i) for i in range(self.nvariations)] )
         if modes           is None:  modes = range(self.nmodes)
-        if self.latest_h5_path is not None and self.append_analysis: shutil.copyfile(self.latest_h5_path, self.data_filename);
-        self.h5file = h5py.File(self.data_filename)
+        if self.latest_h5_path is not None and self.append_analysis:shutil.copyfile(self.latest_h5_path, self.data_filename);
+        self.h5file = pd.HDFStore(self.data_filename); hdf = self.h5file;
         self.variations=variations;  self.modes = modes; self.njunc = len(junc_rect)
 
         for ii, variation in enumerate(variations):
             print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1) ,bg = 44, newline = False )
             self.lv = self.get_lv(variation)
-            if variation in self.h5file.keys() and self.append_analysis: print_NoNewLine('  previously analyzed ...\n');  continue;    
-            print_NoNewLine( ' NOT analyzed\n' )
-            time.sleep(0.5)
+            if (variation+'/hfss_variables') in hdf.keys() and self.append_analysis: print_NoNewLine('  previously analyzed ...\n');  \
+                continue;    
 
-            data.update(self.get_variables(variation=variation))                # get variable values (e.g $pad_length etc.
-            data['nmodes'] = self.nmodes
-
+            print_NoNewLine( ' NOT analyzed\n' );  time.sleep(0.5)
+            hdf[variation+'/hfss_variables'] = self.hfss_variables[variation] \
+                                             = pd.Series(self.get_variables(variation=variation))
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)   # get bare freqs from HFSS
-            data.update(freqs_bare_dict)
 
-            self.pjs={}; PJ_mode_accumulator = []
-
+            self.pjs={}; var_sol_accum = [] 
             for mode in modes:
+                sol = Series({'freq' : freqs_bare_vals[mode]*10**-9, 'modeQ' : freqs_bare_dict['Q_'+str(mode)] })
                 print ' Mode  \x1b[0;30;46m ' +  str(mode) + ' \x1b[0m / ' + str(self.nmodes-1)+'  calculating:'
                 self.solutions.set_mode(mode+1, 0)
                 self.fields = self.setup.get_fields()
-                self.omega = 2*np.pi*freqs_bare_vals[mode]
+                self.omega  = 2*np.pi*freqs_bare_vals[mode] # this should really be passed as argument  to the functions rather than a property of the calss I would say 
 
-                print_NoNewLine('   U_H ...');     self.U_H = self.calc_U_H(variation)
-                print_NoNewLine('   U_E');         self.U_E = self.calc_U_E(variation)
+                print_NoNewLine('   U_H ...');     sol['U_H'] = self.U_H = self.calc_U_H(variation)
+                print_NoNewLine('   U_E');         sol['U_E'] = self.U_E = self.calc_U_E(variation)
                 print(  "   =>   U_L = %.3f%%" %( (self.U_E - self.U_H )/(2*self.U_E)) )
-
-                if self.calculate_H:  # Single-junction method 
-                    lj = 1000*ureg.Quantity(data['_'+LJvariablename]).to_base_units().magnitude                        
-                    pj = self.get_p_j(mode)
-                    self.pjs.update(pj)
-                    data.update(pj)
                 
                 if self.Pj_from_current:
                     def get_LJS(junc_LJ_var_name):
@@ -437,105 +488,47 @@ class Bbq(object):
                         return LJs
                     self.LJs    = get_LJS(junc_LJ_var_name)
                     print '   I -> p_{mJ} ...'
-                    pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, 
+                    sol_PJ = self.calc_Pjs_from_I_for_mode(variation, self.U_H, self.U_E, self.LJs, junc_rect, junc_len, 
                                                                  method = pJ_method, freq = freqs_bare_vals[mode]*10**-9,
-                                                                 calc_sign = junc_lines, modeQ = freqs_bare_dict['Q_'+str(mode)])
-                    PJ_mode_accumulator += [pJ_mj_series]
+                                                                 calc_sign = junc_lines)
+                    sol = sol.append(sol_PJ)
+                
+                if self.njunc == 1:             # Single-junction method using global U_H and U_E; 
+                    lj  = 1000*ureg.Quantity(data['_'+LJvariablename]).to_base_units().magnitude                        
+                    pj1 = self.get_p_j(mode)
+                    self.pjs.update(pj1)        # convinience function for single junction case
+                    if self.Pj_from_current: sol['pj1'] = pj1
                     
-                # get Q seam
-                if seams is not None:
+                if seams is not None:           # get Q seam
                     for seam in seams:
                         Qseam = self.get_Qseam(seam,mode,variation)
-                        data.update(Qseam)
-                
-                # get Q dielectric
-                if dielectrics is not None:
+                        sol = sol.append(self.get_Qseam(seam,mode,variation))
+                        
+                if dielectrics is not None:     # get Q dielectric
                     for dielectric in dielectrics:
                         Qdielectric = self.get_Qdielectric(dielectric, mode, variation)
-                        data.update(Qdielectric)
-                
-                # get Q surface
-                if surface is True:
-                    print variation
-                    print type(variation)
+                        data.update(Qdielectric)                        
+                               
+                if surface is True:             # get Q surface                              
+                    if self.verbose: print variation; print type(variation);
                     Qsurface = self.get_Qsurface(mode, variation)
-                    data.update(Qsurface)
-
-            if self.calc_Hamiltonian_on_fly:  data.update(self.get_Hparams(freqs_bare_vals, self.pjs, lj))
-            if self.Pj_from_current:          self.PJ_multi_sol[variation] = pd.DataFrame(PJ_mode_accumulator, index = modes)
-                #TODO: -- save to h5 file  below
-                     
-            self.data = data
-            data_list.append(data)
-            self.data_list = data_list
+                    data.update(Qsurface) 
+                    
+                var_sol_accum +=[sol]
             
-            # save hdf5 containing data = variables, chis, kerrs, freqs, 
-            self.save_data(data, variation)
+            #TODO: add metadata to the Dataframe & save it
+            #      such as what are the junc_rect names and Lj values etc.  (e.g., http://stackoverflow.com/questions/29129095/save-additional-attributes-in-pandas-dataframe/29130146#29130146)
+            hdf[variation+'/hfss_variables'] = self.eBBQ_solution[variation]  \
+                                             = pd.DataFrame(var_sol_accum, index = modes)            
+            if self.calc_Hamiltonian_on_fly:  raise('Not implemented'); data.update(self.get_Hparams(freqs_bare_vals, self.pjs, lj))
         
         self.h5file.close()
-        self.bbq_analysis = BbqAnalysis(self.data_filename, variations=self.variations)
-        if plot_fig:
-            self.bbq_analysis.plot_Hparams(modes=self.modes)
-            self.bbq_analysis.print_Hparams(modes=self.modes)
+        #TODO: to be implemented below
+#        self.bbq_analysis = BbqAnalysis(self.data_filename, variations=self.variations)
+#        if plot_fig:
+#            self.bbq_analysis.plot_Hparams(modes=self.modes)
+#            self.bbq_analysis.print_Hparams(modes=self.modes)
         return
-        
-    def calc_current(self, fields, line ):
-        '''Function to calculate Current based on line. Not in use 
-            line = integration line between plates - name 
-        '''
-        self.design.Clear_Field_Clac_Stack()
-        comp = fields.Vector_H
-        exp  = comp.integrate_line_tangent(line)
-        I    = exp.evaluate(phase = 90)
-        self.design.Clear_Field_Clac_Stack()
-        return I
-        
-    def calc_avg_current_J_surf_mag(self, variation, junc_rect, junc_len):
-        ''' Peak current I_max for mdoe J in junction J  
-            The avg. is over the surface of the junction. I.e., spatial. '''
-        lv   = self.get_lv(variation)
-        calc = CalcObject([],self.setup)
-        calc = calc.getQty("Jsurf").mag().integrate_surf(name = junc_rect)
-        I    = calc.evaluate(lv=lv) / junc_len #phase = 90
-        #self.design.Clear_Field_Clac_Stack()
-        return  I
-    
-    def calc_line_current(self, variation, junc_line_name):
-        lv   = self.get_lv(variation)
-        calc = CalcObject([],self.setup)
-        calc = calc.getQty("H").imag().integrate_line_tangent(name = junc_line_name)
-        #self.design.Clear_Field_Clac_Stack()
-        return calc.evaluate(lv=lv)
-        
-    def calc_Pjs_from_I_for_mode(self,variation, U_H,U_E, LJs, junc_rects,junc_lens, method = 'J_surf_mag' , modeQ = 0.,
-                                 freq = None, calc_sign = None):
-        ''' Expected that you have specified the mode before calling this 
-            Expected to precalc U_H and U_E for mode, will retunr pandas series object 
-                junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
-                junc_len  = [0.0001]   specify in SI units; i.e., meters
-                LJs       = [8e-09, 8e-09] SI units
-                calc_sign = ['junc_line1', 'junc_line2']    used to define sign of ZPF
-            Potential errors:  If you dont have a line or rect by the right name you will prob get an erorr o the type:
-                com_error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024365), None)
-        '''
-        dat = {'variation':variation,'U_E':U_E,'U_H':U_H, 'method':method, 'modeQ': modeQ}   #TODO: add variaiton parameters in here;  also add some of these as properties cus they are same for many columsn;   such as 'junc_rects':junc_rects
-        for i, junc_rect in enumerate(junc_rects):
-            print_NoNewLine('     ' + junc_rect)
-            if method is 'J_surf_mag':
-                I_peak = self.calc_avg_current_J_surf_mag(variation, junc_rect, junc_lens[i])                         
-            else: 
-                print 'Not yet implemented.'
-            if LJs is None: print_color(' -----> ERROR: Why is LJs passed as None!?')
-            dat['freq']           = freq   # preferrably in GHz
-            #dat['I_'  +junc_rect] = I_peak # stores the phase information as well
-            dat['LJs_'+junc_rect] = LJs[i] # mostly here for debug for now
-            dat['pJ_' +junc_rect] = LJs[i] * I_peak**2 / (2*U_E) 
-            if calc_sign is not None:
-                Idum = self.calc_line_current(variation, calc_sign[i])
-                dat['sign_'+junc_rect] = +1 if Idum > 0 else -1
-                print   '  %+.5f' %(dat['pJ_' +junc_rect] * dat['sign_'+junc_rect] )
-            else: print '  %0.5f' %(dat['pJ_' +junc_rect])
-        return pd.Series(dat) 
     
 
 class BbqAnalysis(object):
