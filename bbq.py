@@ -1,17 +1,15 @@
 from hfss import *
 from hfss import CalcObject, ureg
-import numpy as np
-import h5py
-import time
-import os
-from scipy.constants import *
-import matplotlib.pyplot as plt
+import time, os, shutil, matplotlib.pyplot as plt, numpy as np, pandas as pd
 from stat import S_ISREG, ST_CTIME, ST_MODE
-import sys
-import shutil
-import time, pandas as pd
-from config_bbq import *
+from pandas import HDFStore
+from scipy.constants import *
+from config_bbq      import *
+#import h5py
 
+#==============================================================================
+# Utility functions and difinitions
+#==============================================================================
 fluxQ = hbar / (2*e)
 
 def fact(n):
@@ -62,13 +60,16 @@ def print_color(text, style = 0, fg=24, bg = 43, newline = True):
     else: print s,
 
 
+#==============================================================================
+# Main compuation class & interface with HFSS
+#==============================================================================
 class Bbq(object):
     """ 
     This class defines a BBQ object which calculates and saves
     Hamiltonian parameters from an HFSS simulation
     """
     
-    def __init__(self, project, design, verbose=True, append_analysis=False, calculate_H=True):
+    def __init__(self, project, design, verbose=True, append_analysis=False):
         '''  calculate_H is the single-jucntion method using UH-Ue '''
         self.project = project
         self.design = design
@@ -80,7 +81,6 @@ class Bbq(object):
         self.nvariations = np.size(self.listvariations)
         self.solutions = self.setup.get_solutions()
         self.verbose = verbose
-        self.calculate_H = calculate_H
         self.append_analysis = append_analysis
         
         self.setup_data()
@@ -365,8 +365,7 @@ class Bbq(object):
         return A.evaluate(lv=lv)
         
     def do_eBBQ(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calc_Hamiltonian_on_fly = False,
-               Pj_from_current = False, junc_rect = [], junc_lines = None, junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag', 
-               verbose = 2 ):
+               Pj_from_current = False, junc_rect = [], junc_lines = None, junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag'):
         """ 
             calculate_H:  
                 True: 1 junction method of Pj calculation based on U_H-U_E global. 
@@ -396,16 +395,14 @@ class Bbq(object):
         """
 
         self.Pj_from_current = Pj_from_current; data_list = [];  data = {} # List of data dictionaries. One dict per optimetric sweep.
-        if LJvariablename  is None:  calculate_H      = False
-        if calculate_H is not None:  self.calculate_H = calculate_H
         if Pj_from_current        :  print_color(' Setup: ' + self.setup.name); self.PJ_multi_sol = {} # this is where the result will go             
         if seams       is not None:  self.seams       = seams;       data['seams'] = seams;    
         if dielectrics is not None:  self.dielectrics = dielectrics; data['dielectrics'] = dielectrics;
         if variations      is None:  variations = (['-1'] if self.listvariations == (u'',)  else [str(i) for i in range(self.nvariations)] )
         if modes           is None:  modes = range(self.nmodes)
         if self.latest_h5_path is not None and self.append_analysis: shutil.copyfile(self.latest_h5_path, self.data_filename);
-        self.variations=variations;  self.modes = modes
         self.h5file = h5py.File(self.data_filename)
+        self.variations=variations;  self.modes = modes; self.njunc = len(junc_rect)
 
         for ii, variation in enumerate(variations):
             print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1) ,bg = 44, newline = False )
