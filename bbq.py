@@ -3,14 +3,14 @@ from hfss import CalcObject, ureg
 import time, os, shutil, matplotlib.pyplot as plt, numpy as np, pandas as pd
 from stat import S_ISREG, ST_CTIME, ST_MODE
 from pandas import HDFStore
-from scipy.constants import *
-from config_bbq      import *
+from scipy.constants import *; from scipy.constants import hbar, e as e_el, epsilon_0, pi;  # not sure what else ened sto be imported, idellay we should get rid of all *
+from config_bbq      import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
 #import h5py
 
 #==============================================================================
 # Utility functions and difinitions
 #==============================================================================
-fluxQ = hbar / (2*e)
+fluxQ = hbar / (2*e_el)
 
 def fact(n):
     if n <= 1:
@@ -69,45 +69,37 @@ class Bbq(object):
     Hamiltonian parameters from an HFSS simulation
     """
     
-    def __init__(self, project, design, verbose=True, append_analysis=False):
+    def __init__(self, project, design, verbose=True, append_analysis=False, setup_name = None):
         '''  calculate_H is the single-jucntion method using UH-Ue '''
         self.project = project
-        self.design = design
-        self.setup = design.get_setup() #TODO: Fix: how to chose b/w setups if multiple 
-        self.fields = self.setup.get_fields()
-        self.nmodes = int(self.setup.n_modes)
-        self.listvariations = design._solutions.ListVariations(str(self.setup.solution_name))
+        self.design  = design
+        self.setup   = design.get_setup(name=setup_name)
+        self.fields  = self.setup.get_fields()
+        self.nmodes  = int(self.setup.n_modes)
+        self.listvariations   = design._solutions.ListVariations(str(self.setup.solution_name))
         self.nominalvariation = design.get_nominal_variation()
-        self.nvariations = np.size(self.listvariations)
-        self.solutions = self.setup.get_solutions()
-        self.verbose = verbose
-        self.append_analysis = append_analysis
+        self.nvariations      = np.size(self.listvariations)
+        self.solutions        = self.setup.get_solutions()
+        self.verbose          = verbose
+        self.append_analysis  = append_analysis
         
         self.setup_data()
-        
-        print 'Number of modes : ' + str(self.nmodes)
-        print 'Number of variations : ' + str(self.nvariations)
+        if self.verbose: print 'Number of modes : ' + str(self.nmodes), '\nNumber of variations : ' + str(self.nvariations)
         
         self.get_latest_h5()
         if self.latest_h5_path is not None and self.append_analysis:
             latest_bbq_analysis = BbqAnalysis(self.latest_h5_path)
-            print 'Varied variables and values : '
-            print latest_bbq_analysis.get_swept_variables()
-            print 'Variations : '
-            print latest_bbq_analysis.variations
+            if self.verbose: print 'Varied variables and values : ', latest_bbq_analysis.get_swept_variables(), \
+                                   'Variations : ', latest_bbq_analysis.variations
 
     def get_latest_h5(self):
         dirpath = self.data_dir
         
-        # get all entries in the directory w/ stats
-        entries1 = (os.path.join(dirpath, fn) for fn in os.listdir(dirpath))
+        entries1 = (os.path.join(dirpath, fn) for fn in os.listdir(dirpath))     # get all entries in the directory w/ stats
         entries2 = ((os.stat(path), path) for path in entries1)
-        
-        # leave only regular files, insert creation date
-        entries3 = ((stat[ST_CTIME], path)
+        entries3 = ((stat[ST_CTIME], path)                                       # leave only regular files, insert creation date
                    for stat, path in entries2 if S_ISREG(stat[ST_MODE]) and path[-4:]=='hdf5')
-        #NOTE: on Windows `ST_CTIME` is a creation date 
-        #  but on Unix it could be something else
+        #NOTE: on Windows `ST_CTIME` is a creation date but on Unix it could be something else
         #NOTE: use `ST_MTIME` to sort by a modification date
         
         paths_sorted = []
@@ -116,19 +108,19 @@ class Bbq(object):
             #print time.ctime(cdate), os.path.basename(path)
         if len(paths_sorted) > 0:
             self.latest_h5_path = paths_sorted[-1]
-            print 'This simulations has been analyzed, latest data in ' + self.latest_h5_path
+            if self.verbose: print 'This simulations has been analyzed, latest data in ' + self.latest_h5_path
         else:
             self.latest_h5_path = None
-            print 'This simulation has never been analyzed'
+            if self.verbose: print 'This simulation has never been analyzed'
         
     def setup_data(self):
         data_dir = root_dir + '/' + self.project.name + '/' + self.design.name
-        print data_dir
+        if self.verbose: print data_dir
         if not os.path.isdir(data_dir):
             os.makedirs(data_dir)
         self.data_dir = data_dir
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
-        print "Data will be saved in " + str(data_dir)
+        if self.verbose: print "Data will be saved in " + str(data_dir)
         
     @deprecated
     def calc_p_j(self, modes=None, variation=None):
@@ -551,6 +543,7 @@ class BbqAnalysis(object):
     This data is obtained using e.g bbq.do_bbq
     '''    
     def __init__(self, data_filename, variations=None):
+        #TODO: needs to be updated to new standard; currently borken
         self.data_filename = data_filename
         self.h5data = h5py.File(data_filename, 'r')
     
@@ -561,6 +554,7 @@ class BbqAnalysis(object):
         self.nmodes = self.h5data[self.variations[0]]['nmodes'].value      
         
     def get_swept_variables(self):
+        #TODO: needs to be updated to new standard; currently borken
         swept_variables_names = []
         swept_variables_values = []
         for name in self.h5data[self.variations[0]].keys():
@@ -596,6 +590,7 @@ class BbqAnalysis(object):
                     n+=1
     
     def print_Hparams(self, variation=None, modes=None):
+        #TODO: needs to be updated to new standard; currently borken
         if modes==None:
             modes = range(self.nmodes)
         else:
@@ -633,6 +628,7 @@ class BbqAnalysis(object):
                     print chi_m_n + ' = ' + str(self.h5data[variation][chi_m_n].value/2/pi/1e6) + ' MHz'
         
     def plot_Hparams(self, variable_name=None, modes=None):
+        #TODO: needs to be updated to new standard; currently borken
         fig, ax = plt.subplots(2,2, figsize=(24,10))
 
         if variable_name == None:
