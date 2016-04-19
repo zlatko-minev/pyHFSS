@@ -364,7 +364,7 @@ class Bbq(object):
         A=A.integrate_vol(name=volume)
         return A.evaluate(lv=lv)
         
-    def do_eBBQ(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calculate_H = None,
+    def do_eBBQ(self, LJvariablename=None, variations=None, plot_fig=True, seams=None, dielectrics=None, surface=False, modes=None, calc_Hamiltonian_on_fly = False,
                Pj_from_current = False, junc_rect = [], junc_lines = None, junc_len = [], junc_LJ_var_name = [], pJ_method =  'J_surf_mag', 
                verbose = 2 ):
         """ 
@@ -391,57 +391,28 @@ class Bbq(object):
             Other parameters:
                 seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
                 variations = ['0', '1']
+            
+            A variation is a combination of project/design variables in an optimetric sweep
         """
-        ### Process Input Params 
-        # Single- junction & seam / dielectric data storage 
-        data_list = [];  data = {} # List of data dictionaries. One dict per optimetric sweep.
-        if LJvariablename  is None: calculate_H      = False
-        if calculate_H is not None: self.calculate_H = calculate_H
-        calc_fields = (seams is not None) or (dielectrics is not None) or surface or self.calculate_H or Pj_from_current # Any calculation of fields?
-        
-        # Multi-junction:
-        self.Pj_from_current = Pj_from_current
-        if Pj_from_current:
-            print_color(' Setup: ' + self.setup.name)
-            self.PJ_multi_sol = {} # this is where the result will go 
-            
-        if seams is not None:
-            self.seams = seams
-            data['seams'] = seams
-            
-        if dielectrics is not None:
-            self.dielectrics = dielectrics
-            data['dielectrics'] = dielectrics
-            
-        
-        # A variation is a combination of project/design 
-        # variables in an optimetric sweep
-        if variations is None:
-            if self.listvariations == (u'',): # no optimetric sweep
-                variations = ['-1']
-            else:
-                variations = [str(i) for i in range(self.nvariations)]
-        self.variations = variations
 
-        if modes is None:
-            modes = range(self.nmodes)
-        self.modes = modes
-        
-        ### Main loop ###
-        if self.latest_h5_path is not None and self.append_analysis:
-            shutil.copyfile(self.latest_h5_path, self.data_filename)
+        self.Pj_from_current = Pj_from_current; data_list = [];  data = {} # List of data dictionaries. One dict per optimetric sweep.
+        if LJvariablename  is None:  calculate_H      = False
+        if calculate_H is not None:  self.calculate_H = calculate_H
+        if Pj_from_current        :  print_color(' Setup: ' + self.setup.name); self.PJ_multi_sol = {} # this is where the result will go             
+        if seams       is not None:  self.seams       = seams;       data['seams'] = seams;    
+        if dielectrics is not None:  self.dielectrics = dielectrics; data['dielectrics'] = dielectrics;
+        if variations      is None:  variations = (['-1'] if self.listvariations == (u'',)  else [str(i) for i in range(self.nvariations)] )
+        if modes           is None:  modes = range(self.nmodes)
+        if self.latest_h5_path is not None and self.append_analysis: shutil.copyfile(self.latest_h5_path, self.data_filename);
+        self.variations=variations;  self.modes = modes
         self.h5file = h5py.File(self.data_filename)
 
         for ii, variation in enumerate(variations):
-
             print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1) ,bg = 44, newline = False )
             self.lv = self.get_lv(variation)
-            
-            if variation in self.h5file.keys() and self.append_analysis:
-                print_NoNewLine('  previously analyzed ...\n')
-                continue
+            if variation in self.h5file.keys() and self.append_analysis: print_NoNewLine('  previously analyzed ...\n');  continue;    
             print_NoNewLine( ' NOT analyzed\n' )
-            time.sleep(1)
+            time.sleep(0.5)
 
             data.update(self.get_variables(variation=variation))                # get variable values (e.g $pad_length etc.
             data['nmodes'] = self.nmodes
@@ -449,71 +420,61 @@ class Bbq(object):
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)   # get bare freqs from HFSS
             data.update(freqs_bare_dict)
 
-            if verbose < 2:
-                if self.verbose: print freqs_bare_dict
-                print '---------------------- calc_fields ---------------'
-                print str(calc_fields)
-                print '--------------------'
-            if calc_fields:
-                self.pjs={}; PJ_mode_accumulator = []
+            self.pjs={}; PJ_mode_accumulator = []
 
-                for mode in modes:
-                    print ' Mode  \x1b[0;30;46m ' +  str(mode) + ' \x1b[0m / ' + str(self.nmodes-1)+'  calculating:'
-                    self.solutions.set_mode(mode+1, 0)
-                    self.fields = self.setup.get_fields()
-                    self.omega = 2*np.pi*freqs_bare_vals[mode]
+            for mode in modes:
+                print ' Mode  \x1b[0;30;46m ' +  str(mode) + ' \x1b[0m / ' + str(self.nmodes-1)+'  calculating:'
+                self.solutions.set_mode(mode+1, 0)
+                self.fields = self.setup.get_fields()
+                self.omega = 2*np.pi*freqs_bare_vals[mode]
 
-                    print_NoNewLine('   U_H ...');     self.U_H = self.calc_U_H(variation)
-                    print_NoNewLine('   U_E');         self.U_E = self.calc_U_E(variation)
-                    print(  "   =>   U_L = %.3f%%" %( (self.U_E - self.U_H )/(2*self.U_E)) )
+                print_NoNewLine('   U_H ...');     self.U_H = self.calc_U_H(variation)
+                print_NoNewLine('   U_E');         self.U_E = self.calc_U_E(variation)
+                print(  "   =>   U_L = %.3f%%" %( (self.U_E - self.U_H )/(2*self.U_E)) )
 
-                    if self.calculate_H:  # Single-junction method 
-                        lj = 1000*ureg.Quantity(data['_'+LJvariablename]).to_base_units().magnitude                        
-                        pj = self.get_p_j(mode)
-                        self.pjs.update(pj)
-                        data.update(pj)
-                    
-                    if self.Pj_from_current:
-                        def get_LJS(junc_LJ_var_name):
-                            ''''create an array of the LJs values in standard units'''
-                            LJs = []  
-                            for LJvar_nm in junc_LJ_var_name:
-                                lj = 1000*ureg.Quantity(data['_'+LJvar_nm]).to_base_units().magnitude  
-                                LJs += [lj]
-                            return LJs
-                        self.LJs    = get_LJS(junc_LJ_var_name)
-                        print '   I -> p_{mJ} ...'
-                        pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, 
-                                                                     method = pJ_method, freq = freqs_bare_vals[mode]*10**-9,
-                                                                     calc_sign = junc_lines, modeQ = freqs_bare_dict['Q_'+str(mode)])
-                        PJ_mode_accumulator += [pJ_mj_series]
-                        
-                    # get Q seam
-                    if seams is not None:
-                        for seam in seams:
-                            Qseam = self.get_Qseam(seam,mode,variation)
-                            data.update(Qseam)
-                    
-                    # get Q dielectric
-                    if dielectrics is not None:
-                        for dielectric in dielectrics:
-                            Qdielectric = self.get_Qdielectric(dielectric, mode, variation)
-                            data.update(Qdielectric)
-                    
-                    # get Q surface
-                    if surface is True:
-                        print variation
-                        print type(variation)
-                        Qsurface = self.get_Qsurface(mode, variation)
-                        data.update(Qsurface)
-
-                # get Kerrs and chis
-                if self.calculate_H:
-                    data.update(self.get_Hparams(freqs_bare_vals, self.pjs, lj))
-                    
+                if self.calculate_H:  # Single-junction method 
+                    lj = 1000*ureg.Quantity(data['_'+LJvariablename]).to_base_units().magnitude                        
+                    pj = self.get_p_j(mode)
+                    self.pjs.update(pj)
+                    data.update(pj)
+                
                 if self.Pj_from_current:
-                    self.PJ_multi_sol[variation] = pd.DataFrame(PJ_mode_accumulator, index = modes)
-                    #TODO: -- save to h5 file  below
+                    def get_LJS(junc_LJ_var_name):
+                        ''''create an array of the LJs values in standard units'''
+                        LJs = []  
+                        for LJvar_nm in junc_LJ_var_name:
+                            lj = 1000*ureg.Quantity(data['_'+LJvar_nm]).to_base_units().magnitude  
+                            LJs += [lj]
+                        return LJs
+                    self.LJs    = get_LJS(junc_LJ_var_name)
+                    print '   I -> p_{mJ} ...'
+                    pJ_mj_series = self.calc_Pjs_from_I_for_mode(variation, self.U_H,self.U_E, self.LJs, junc_rect, junc_len, 
+                                                                 method = pJ_method, freq = freqs_bare_vals[mode]*10**-9,
+                                                                 calc_sign = junc_lines, modeQ = freqs_bare_dict['Q_'+str(mode)])
+                    PJ_mode_accumulator += [pJ_mj_series]
+                    
+                # get Q seam
+                if seams is not None:
+                    for seam in seams:
+                        Qseam = self.get_Qseam(seam,mode,variation)
+                        data.update(Qseam)
+                
+                # get Q dielectric
+                if dielectrics is not None:
+                    for dielectric in dielectrics:
+                        Qdielectric = self.get_Qdielectric(dielectric, mode, variation)
+                        data.update(Qdielectric)
+                
+                # get Q surface
+                if surface is True:
+                    print variation
+                    print type(variation)
+                    Qsurface = self.get_Qsurface(mode, variation)
+                    data.update(Qsurface)
+
+            if self.calc_Hamiltonian_on_fly:  data.update(self.get_Hparams(freqs_bare_vals, self.pjs, lj))
+            if self.Pj_from_current:          self.PJ_multi_sol[variation] = pd.DataFrame(PJ_mode_accumulator, index = modes)
+                #TODO: -- save to h5 file  below
                      
             self.data = data
             data_list.append(data)
