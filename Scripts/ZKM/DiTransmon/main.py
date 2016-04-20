@@ -1,12 +1,11 @@
 #%%
 import sys;  IMP_PATH = r'C:\\Users\\rslqulab\\Desktop\\zkm\\pyHFSS\\';
 if ~(IMP_PATH in sys.path): sys.path.append(IMP_PATH);
-    
-import hfss;   import bbqNumericalDiagonalization; import pandas as pd
-from hfss import CalcObject, ureg
-from hfss import load_HFSS_project
-import bbq, matplotlib.pyplot as plt, numpy as np;  from bbq import print_color, divide_diagonal_by_2, print_matrix
-from IPython.display import display # test change
+
+import pandas as pd, matplotlib.pyplot as plt, numpy as np;
+import hfss, bbq, bbqNumericalDiagonalization
+from hfss import CalcObject, ureg, load_HFSS_project
+from bbq  import eBBQ_Pjm_to_H_params, print_color, print_matrix
 
 
 if 1:    
@@ -23,63 +22,16 @@ if 1:
     junc_LJ_names = ['LJ1', 'LJ2'];
     junc_lens     = [0.0001]*2                                                       # this can soon be replaced by intgrating over junc_lines 
     bbp.do_eBBQ(junc_rect=junc_rects, junc_lines = junc_lines,  junc_len = junc_lens, junc_LJ_var_name = junc_LJ_names)
-    sol = bbp.sols
+    sol           = bbp.sols
+    meta_datas    = bbp.meta_data
 
 #%%
-def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7):
-    ''' numerical diagonalizaiton for energy BBQ
-        fzpfs: reduced zpf  ( in units of \phi_0
-    '''    
-    from bbqNumericalDiagonalization import bbq_hmt, make_dispersive, fqr
-    
-    fzpfs = np.zeros(PJ.T.shape)
-    for junc in xrange(fzpfs.shape[0]):
-        for mode in xrange(fzpfs.shape[1]):
-            fzpfs[junc, mode] = np.sqrt(PJ[mode,junc] * Om[mode,mode] /  EJ[junc,junc] ) #*0.001
-    fzpfs = fzpfs * SIGN.T
-    
-    H     = bbq_hmt(freqs*10**9, LJs.values.astype(np.float), fqr*fzpfs, cos_trunc, fock_trunc)
-    f1s, CHI_ND, fzpfs, f0s  = make_dispersive(H, fock_trunc, fzpfs, freqs)  # f0s = freqs
-    CHI_ND= -1*CHI_ND *1E-6;
-    return f1s, CHI_ND, fzpfs, f0s; 
-    
-def eBBQ_participation2_H_params(s, cos_trunc = None, fock_trunc = None):
-    '''   
-    returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
-        f1: qubit dressed freq
-        f0: qubit linear freq (eigenmode) 
-        and an overcomplete set of matrcieis
-    '''
-    import  scipy;    Planck  = scipy.constants.Planck
-    f0s        = s['freq'].values    
-    Qs         = s.loc[:,'modeQ']
-    LJs        = s.loc[0,s.keys().str.contains('LJs')] # LJ in nH
-    EJs        = (bbq.fluxQ**2/LJs/Planck*10**-9).astype(np.float)        # EJs in GHz
-    PJ_Jsu     = s.loc[:,s.keys().str.contains('pJ')]  # EPR from Jsurf avg
-    PJ_Jsu_sum = PJ_Jsu.apply(sum, axis = 1)           # sum of participations as calculated by avg surf current 
-    PJ_glb_sum = (s['U_E'] - s['U_H'])/(2*s['U_E'])    # sum of participations as calculated by global UH and UE  
-    diff       = (PJ_Jsu_sum-PJ_glb_sum)/PJ_glb_sum*100# debug
-    if 1:  # Renormalize: to sum to PJ_glb_sum; so that PJs.apply(sum, axis = 1) - PJ_glb_sum =0
-           #TODO: figure out the systematic   # print '% diff b/w Jsurf_avg & global Pj:'; display(diff)
-        PJs = PJ_Jsu.divide(PJ_Jsu_sum, axis=0).mul(PJ_glb_sum,axis=0)
-    else: PJs = PJ_Jsu
-    SIGN  = s.loc[:,s.keys().str.contains('sign_')]
-    PJ    = np.mat(PJs.values)
-    Om    = np.mat(np.diagflat(f0s)) 
-    EJ    = np.mat(np.diagflat(EJs.values))
-    CHI_O1= Om * PJ * EJ.I * PJ.T * Om * 1000       # MHz
-    CHI_O1= divide_diagonal_by_2(CHI_O1)            # Make the diagonals alpha 
-    f1s   = f0s - np.diag(CHI_O1)                   # 1st order PT expect freq to be dressed down by alpha 
-    if cos_trunc is not None:
-        f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc)                
-    else: CHI_ND, fzpfs = None, None
-    return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs
-#%%
+   
 if 1:
-    variation = '0'; s           = sol[variation];  
+    variation = '0'; s  = sol[variation];   meta_data = meta_datas[variation]
     cos_trunc = 6;   fock_trunc  = 7;
     CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
-        eBBQ_participation2_H_params(s, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
+        eBBQ_Pjm_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
     print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
     #print '\nCHI_O1=\t PT. [alpha diag]'; print_matrix(CHI_O1,append_row ="MHz" )
     print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
@@ -88,6 +40,7 @@ if 1:
     print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
     varz = bbp.get_variables(variation=variation)     
     print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1'] })
+
 #%%==============================================================================
 #     Plot results for sweep
 #==============================================================================
@@ -97,7 +50,7 @@ if 1:
     for key, s in sol.iteritems():
         varz  = bbp.get_variables(variation=key)
         SWP  += [ ureg.Quantity(varz['_'+swpvar]).magnitude ]  
-        RES  += [ eBBQ_participation2_H_params(s, cos_trunc = cos_trunc, fock_trunc = fock_trunc) ]
+        RES  += [ eBBQ_Pjm_to_H_params(s, cos_trunc = cos_trunc, fock_trunc = fock_trunc) ]
     import matplotlib.gridspec as gridspec;
     #%%
     fig = plt.figure(num = 1, figsize=(19,5)) 

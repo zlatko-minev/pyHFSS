@@ -412,7 +412,6 @@ class Bbq(object):
                 print 'Not yet implemented.'
             if LJs is None: print_color(' -----> ERROR: Why is LJs passed as None!?')
             #dat['I_'  +junc_rect] = I_peak # stores the phase information as well
-            dat['LJs_'+junc_rect] = LJs[i] #TODO: move this to series proetery  mostly here for debug for now
             dat['pJ_' +junc_rect] = LJs[i] * I_peak**2 / (2*U_E) 
             if calc_sign is not None:
                 Idum = self.calc_line_current(variation, calc_sign[i])
@@ -421,14 +420,11 @@ class Bbq(object):
             else: print '  %0.5f' %(dat['pJ_' +junc_rect])
         return pd.Series(dat) 
         
-    def do_eBBQ(self, 
-               Pj_from_current= True, junc_rect = [],  junc_lines = None,  junc_len = [],  junc_LJ_var_name = [], pJ_method =  'J_surf_mag',  calc_Hamiltonian_on_fly = False,
-               variations=None, plot_fig   = False,
-               seams    =None, dielectrics=None,      surface=False, modes=None):
-        """ 
-            calculate_H:  
-                True: 1 junction method of Pj calculation based on U_H-U_E global. 
-                
+    def do_eBBQ(self, variations= None, plot_fig  = False, modes      = None,
+               Pj_from_current  = True, junc_rect = [],    junc_lines = None,  junc_len = [],  junc_LJ_var_name = [],    
+               dielectrics      = None, seams     = None,  surface    = False, 
+               calc_Hamiltonian = False,pJ_method =  'J_surf_mag'):
+        """               
             Pj_from_current:
                 Multi-junction calculation of energy participation ratio matrix based on <I_J>. Current is integrated average of J_surf by default: (zkm 3/29/16)
                 Will calculate the Pj matrix for the selected modes for the given junctions junc_rect array & length of juuncs
@@ -443,8 +439,6 @@ class Bbq(object):
                     Low dissipation (high-Q). 
                     Right now, we assume that there are no lumped capcitors to simply calculations. Not required. 
                     We assume that there are only lumped inductors, so that U_tot = U_E+U_H+U_L    and U_C =0, so that U_tot = 2*U_E;
-                Results in:
-                    self.PJ_multi_sol - a Pandas DataFrame of all the information
             
             Other parameters:
                 seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
@@ -489,6 +483,7 @@ class Bbq(object):
                 
                 if self.Pj_from_current:
                     self.LJs    = [ ureg.Quantity(varz['_'+LJvar_nm]).to_base_units().magnitude  for LJvar_nm in junc_LJ_var_name]
+                    meta_data['LJs'] = dict(zip(junc_LJ_var_name, self.LJs))
                     print '   I -> p_{mJ} ...'
                     sol_PJ = self.calc_Pjs_from_I_for_mode(variation, self.U_H, self.U_E, self.LJs, junc_rect, junc_len, 
                                                                  method = pJ_method, freq = freqs_bare_vals[mode]*10**-9,
@@ -518,23 +513,70 @@ class Bbq(object):
                                              = pd.DataFrame(var_sol_accum, index = modes)            
             hdf[variation+'/meta_data']      = self.meta_data[variation]  \
                                              = Series(meta_data)
-            if calc_Hamiltonian_on_fly:  raise('Not implemented'); #for 1 junct: self.get_Hparams(freqs_bare_vals, self.pjs, lj))
+            if calc_Hamiltonian:  raise('Not implemented'); #for 1 junct: self.get_Hparams(freqs_bare_vals, self.pjs, lj))
             
         self.h5file.close()
-        #TODO: to be implemented below
-#        self.bbq_analysis = BbqAnalysis(self.data_filename, variations=self.variations)
+        self.bbq_analysis = BbqAnalysis(self.data_filename, variations=self.variations)
+#TODO: to be implemented below
 #        if plot_fig:
 #            self.bbq_analysis.plot_Hparams(modes=self.modes)
 #            self.bbq_analysis.print_Hparams(modes=self.modes)
         return
     
-#%%
-from pandas import HDFStore
-hdf = HDFStore(bbp.data_filename, mode = 'r') 
-variations = []
-for key in hdf.keys():
-    if 'hfss_variables' in key:
-        variations += re.findall(r'\b\d+\b', key)
+
+def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7):
+    ''' numerical diagonalizaiton for energy BBQ
+        fzpfs: reduced zpf  ( in units of \phi_0
+    '''    
+    from bbqNumericalDiagonalization import bbq_hmt, make_dispersive, fqr
+    
+    fzpfs = np.zeros(PJ.T.shape)
+    for junc in xrange(fzpfs.shape[0]):
+        for mode in xrange(fzpfs.shape[1]):
+            fzpfs[junc, mode] = np.sqrt(PJ[mode,junc] * Om[mode,mode] /  EJ[junc,junc] ) #*0.001
+    fzpfs = fzpfs * SIGN.T
+    
+    H     = bbq_hmt(freqs*10**9, LJs.astype(np.float), fqr*fzpfs, cos_trunc, fock_trunc)
+    f1s, CHI_ND, fzpfs, f0s  = make_dispersive(H, fock_trunc, fzpfs, freqs)  # f0s = freqs
+    CHI_ND= -1*CHI_ND *1E-6;
+    return f1s, CHI_ND, fzpfs, f0s;
+    
+def eBBQ_Pjm_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None):
+    '''   
+    returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
+        f1: qubit dressed freq
+        f0: qubit linear freq (eigenmode) 
+        and an overcomplete set of matrcieis
+        ask zkm for info.
+    '''
+    import  scipy;    Planck  = scipy.constants.Planck
+    f0s        = np.array( s['freq'] )
+    Qs         = s['modeQ']
+    LJs        = np.array(meta_data['LJs'].values())                     # LJ in H
+    EJs        = (fluxQ**2/LJs/Planck*10**-9).astype(np.float)        # EJs in GHz
+    PJ_Jsu     = s.loc[:,s.keys().str.contains('pJ')]  # EPR from Jsurf avg
+    PJ_Jsu_sum = PJ_Jsu.apply(sum, axis = 1)           # sum of participations as calculated by avg surf current 
+    PJ_glb_sum = (s['U_E'] - s['U_H'])/(2*s['U_E'])    # sum of participations as calculated by global UH and UE  
+    diff       = (PJ_Jsu_sum-PJ_glb_sum)/PJ_glb_sum*100# debug
+    if 1:  # Renormalize
+        PJs = PJ_Jsu.divide(PJ_Jsu_sum, axis=0).mul(PJ_glb_sum,axis=0)
+    else: PJs = PJ_Jsu
+    SIGN  = s.loc[:,s.keys().str.contains('sign_')]
+    PJ    = np.mat(PJs.values)
+    Om    = np.mat(np.diagflat(f0s)) 
+    EJ    = np.mat(np.diagflat(EJs))
+    CHI_O1= Om * PJ * EJ.I * PJ.T * Om * 1000       # MHz
+    CHI_O1= divide_diagonal_by_2(CHI_O1)            # Make the diagonals alpha 
+    f1s   = f0s - np.diag(CHI_O1)                   # 1st order PT expect freq to be dressed down by alpha 
+    if cos_trunc is not None:
+        import bbqNumericalDiagonalization
+        from bbqNumericalDiagonalization import eBBQ_ND;
+        f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc)                
+    else: CHI_ND, fzpfs = None, None
+    return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs
+    # the return could be made clener, or dictionary 
+
+
 #%%    
 class BbqAnalysis(object):
     ''' defines an analysis object which loads and plots data from a h5 file
@@ -561,8 +603,9 @@ class BbqAnalysis(object):
                 self.hfss_variables[variation] = hdf[variation+'/hfss_variables']
                 self.sols[variation]           = hdf[variation+'/eBBQ_solution']  
                 self.meta_data[variation]      = hdf[variation+'/meta_data']
-            self.nmodes         = self.sols[variations[0]].shape[0]      
-        
+            self.nmodes         = self.sols[variations[0]].shape[0] 
+            
+    @deprecated  
     def get_swept_variables(self):
         #TODO: needs to be updated to new standard; currently borken
         swept_variables_names = []
@@ -578,13 +621,15 @@ class BbqAnalysis(object):
             else:
                 pass
         return swept_variables_names, swept_variables_values
-        
+    
+    @deprecated
     def get_variable_variations(self, variablename):
         variables = []
         for variation in self.variations:
             variables.append(self.h5data[variation][variablename].value)
         return np.asarray(variables)
     
+    @deprecated
     def get_float_units(self, variable_name, variation='0'):
         variable_value = self.h5data[variation][variable_name].value
         n = 1
@@ -598,7 +643,7 @@ class BbqAnalysis(object):
                     return float(variable_value[:-n]), variable_value[len(variable_value)-n:]
                 except:
                     n+=1
-    
+    @deprecated
     def print_Hparams(self, variation=None, modes=None):
         #TODO: needs to be updated to new standard; currently borken
         if modes==None:
@@ -636,7 +681,8 @@ class BbqAnalysis(object):
                 chi_m_n = 'chi_'+str(m)+'_'+str(n)
                 if chi_m_n in self.h5data[variation].keys():
                     print chi_m_n + ' = ' + str(self.h5data[variation][chi_m_n].value/2/pi/1e6) + ' MHz'
-        
+       
+    @deprecated
     def plot_Hparams(self, variable_name=None, modes=None):
         #TODO: needs to be updated to new standard; currently borken
         fig, ax = plt.subplots(2,2, figsize=(24,10))
