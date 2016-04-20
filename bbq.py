@@ -1,20 +1,20 @@
 from hfss import *
 from hfss import CalcObject
-import time, os, shutil, matplotlib.pyplot as plt, numpy as np, pandas as pd
+import time, os, shutil, matplotlib.pyplot as plt, numpy as np, pandas as pd, warnings
 from stat import S_ISREG, ST_CTIME, ST_MODE
 from pandas import HDFStore, Series, DataFrame
 from scipy.constants import *; from scipy.constants import hbar, e as e_el, epsilon_0, pi;  # not sure what else ened sto be imported, idellay we should get rid of all *
 from config_bbq      import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
 from pint import UnitRegistry; 
 
-ureg = UnitRegistry(system='mks')
-
-#import h5py
-
 #==============================================================================
 # Utility functions and difinitions
 #==============================================================================
+
+ureg  = UnitRegistry(system='mks')
 fluxQ = hbar / (2*e_el)
+
+warnings.filterwarnings('ignore', category=pd.io.pytables.PerformanceWarning)
 
 def fact(n):
     if n <= 1:
@@ -528,6 +528,10 @@ def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7):
     ''' numerical diagonalizaiton for energy BBQ
         fzpfs: reduced zpf  ( in units of \phi_0
     '''    
+    assert(all(freqs<1E6)), "Please input the frequencies in GHz"
+    assert(all(LJs  <1E-3)),"Please input the inductances in Henries"
+    
+    import bbqNumericalDiagonalization
     from bbqNumericalDiagonalization import bbq_hmt, make_dispersive, fqr
     
     fzpfs = np.zeros(PJ.T.shape)
@@ -541,7 +545,7 @@ def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7):
     CHI_ND= -1*CHI_ND *1E-6;
     return f1s, CHI_ND, fzpfs, f0s;
     
-def eBBQ_Pjm_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None):
+def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None):
     '''   
     returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
         f1: qubit dressed freq
@@ -569,8 +573,6 @@ def eBBQ_Pjm_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None):
     CHI_O1= divide_diagonal_by_2(CHI_O1)            # Make the diagonals alpha 
     f1s   = f0s - np.diag(CHI_O1)                   # 1st order PT expect freq to be dressed down by alpha 
     if cos_trunc is not None:
-        import bbqNumericalDiagonalization
-        from bbqNumericalDiagonalization import eBBQ_ND;
         f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc)                
     else: CHI_ND, fzpfs = None, None
     return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs

@@ -5,7 +5,7 @@ if ~(IMP_PATH in sys.path): sys.path.append(IMP_PATH);
 import pandas as pd, matplotlib.pyplot as plt, numpy as np;
 import hfss, bbq, bbqNumericalDiagonalization
 from hfss import CalcObject, ureg, load_HFSS_project
-from bbq  import eBBQ_Pjm_to_H_params, print_color, print_matrix
+from bbq  import eBBQ_Pmj_to_H_params, print_color, print_matrix
 
 
 if 1:    
@@ -22,23 +22,28 @@ if 1:
     junc_LJ_names = ['LJ1', 'LJ2'];
     junc_lens     = [0.0001]*2                                                       # this can soon be replaced by intgrating over junc_lines 
     bbp.do_eBBQ(junc_rect=junc_rects, junc_lines = junc_lines,  junc_len = junc_lens, junc_LJ_var_name = junc_LJ_names)
-    sol           = bbp.sols
-    meta_datas    = bbp.meta_data
+    
+    sol           = bbp.bbq_analysis.sols
+    meta_datas    = bbp.bbq_analysis.meta_data
+    hfss_variables= bbp.bbq_analysis.hfss_variables
 
 #%%
-   
 if 1:
-    variation = '0'; s  = sol[variation];   meta_data = meta_datas[variation]
+    variation = '0'; 
+    s         = sol[variation];   
+    meta_data = meta_datas[variation]
+    varz      = hfss_variables[variation]
+    
     cos_trunc = 6;   fock_trunc  = 7;
     CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
-        eBBQ_Pjm_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
+        eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
+    
     print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
     #print '\nCHI_O1=\t PT. [alpha diag]'; print_matrix(CHI_O1,append_row ="MHz" )
     print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
     print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
     print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
     print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
-    varz = bbp.get_variables(variation=variation)     
     print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1'] })
 
 #%%==============================================================================
@@ -48,9 +53,9 @@ if 1:
     swpvar='LJ1'    
     RES = []; SWP = [];
     for key, s in sol.iteritems():
-        varz  = bbp.get_variables(variation=key)
+        varz  = hfss_variables[variation]
         SWP  += [ ureg.Quantity(varz['_'+swpvar]).magnitude ]  
-        RES  += [ eBBQ_Pjm_to_H_params(s, cos_trunc = cos_trunc, fock_trunc = fock_trunc) ]
+        RES  += [ eBBQ_Pmj_to_H_params(s, meta_datas[key], cos_trunc = cos_trunc, fock_trunc = fock_trunc) ]
     import matplotlib.gridspec as gridspec;
     #%%
     fig = plt.figure(num = 1, figsize=(19,5)) 
