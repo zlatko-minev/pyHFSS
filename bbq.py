@@ -606,6 +606,44 @@ class BbqAnalysis(object):
                 self.sols[variation]           = hdf[variation+'/eBBQ_solution']  
                 self.meta_data[variation]      = hdf[variation+'/meta_data']
             self.nmodes         = self.sols[variations[0]].shape[0] 
+            self.meta_data      = DataFrame(self.meta_data)
+    
+    def get_solution_column(self, col_name, swp_var, sort = True): 
+        ''' sort by variation -- must be numeric '''
+        Qs, swp = [], []       
+        for key, sol in self.sols.iteritems():
+            Qs  += [ sol[col_name] ]
+            varz  = self.hfss_variables[key]
+            swp += [ ureg.Quantity(varz['_'+swp_var]).magnitude ] 
+        Qs  = DataFrame(Qs, index = swp)
+        return Qs if not sort else Qs.sort_index() 
+    
+    def get_Qs(self, swp_var, sort = True):
+        return self.get_solution_column('modeQ', swp_var, sort)
+        
+    def get_Fs(self, swp_var, sort = True):
+        return self.get_solution_column('freq', swp_var, sort)
+        
+    def get_junc_rect_names(self):
+        return self.meta_data.loc['junc_rect',:]
+        
+    def analyze_variation(self, variation = '0', print_results = True, 
+                          cos_trunc = 6,  fock_trunc  = 7):
+        s         = self.sol[variation];   
+        meta_data = self.meta_datas[variation]
+        varz      = self.hfss_variables[variation]
+        
+        CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
+            eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
+        
+        if print_results:
+            print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
+            #print '\nCHI_O1=\t PT. [alpha diag]'; print_matrix(CHI_O1,append_row ="MHz" )
+            print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
+            print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
+            print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
+            print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
+        return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz
             
     @deprecated  
     def get_swept_variables(self):
