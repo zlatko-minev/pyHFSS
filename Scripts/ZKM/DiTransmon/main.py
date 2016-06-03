@@ -1,6 +1,6 @@
-#%%
+#%% @author: Zlatko
 import sys;  IMP_PATH = r'C:\\Users\\rslqulab\\Desktop\\zkm\\pyHFSS\\';
-if ~(IMP_PATH in sys.path): sys.path.append(IMP_PATH);
+if ~(IMP_PATH in sys.path): sys.path.insert(0,IMP_PATH);
 
 import pandas as pd, matplotlib.pyplot as plt, numpy as np;
 import hfss, bbq, bbqNumericalDiagonalization
@@ -9,12 +9,12 @@ from bbq  import eBBQ_Pmj_to_H_params, print_color, print_matrix
 
 
 if 1:    
-#    proj_name    = r'2016_03_28_Di_Transmon from Antonio' 
-#    project_path = 'C:\\Users\\rslqulab\\Desktop\\zkm\\2016_qm_jumps\\DiTransmon_Asymetric\\'
-    proj_name    = r'pin_position_sweep(perfect conductor)_4-20-16' 
-    project_path = 'C:\\Users\\rslqulab\\Desktop\Lysander\\'
+    proj_name    = r'qubit_separation_sweep_dipole_moment_scale1.25_6-3-16' 
+    project_path = 'C:\\Users\rslqulab\Desktop\Lysander\\'
+    #proj_name    = r'pin_shift_sweep(circuit=-1500microns_perfect conductor)_5-2-16' 
+    #project_path = 'C:\\Users\\rslqulab\\Desktop\Lysander\\'
     app, desktop, project = load_HFSS_project(proj_name, project_path)
-    design       = project.get_active_design() #get_design("CoaxCav")
+    design       = project.get_design("11. SHANTANU FAB SM22 Col 1 Row 9 Measured [May 6 2016]") #project.get_active_design(10. SHANTANU FAB 1 [April13 2016])  #
     
     bbp = bbq.Bbq(project, design, append_analysis=False)
 
@@ -32,9 +32,9 @@ if 1:
 
 #%%
 if 1:
-    cos_trunc = 6;   fock_trunc  = 7;
+    cos_trunc = 10;   fock_trunc  = 9;
     CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz = \
-        bba.analyze_variation(variation = '0', cos_trunc = 6,   fock_trunc  = 7)
+        bba.analyze_variation(variation = '0', cos_trunc = cos_trunc,   fock_trunc  = fock_trunc)
 #    s         = sol[variation];   
 #    meta_data = meta_datas[variation]
 #    varz      = hfss_variables[variation]    
@@ -47,13 +47,13 @@ if 1:
 #    print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
 #    print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
 #    print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
-    print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1'] })
+    print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1','_LJ2'] })
 
 #%%==============================================================================
 #     Plot results for sweep
 #==============================================================================
 if 1:
-    swpvar='pin_shift'    
+    swpvar='qubit_distance'    
     RES = []; SWP = [];
     for key, s in sol.iteritems():
         varz  = hfss_variables[key]

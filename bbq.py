@@ -545,7 +545,7 @@ def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7):
     CHI_ND= -1*CHI_ND *1E-6;
     return f1s, CHI_ND, fzpfs, f0s;
     
-def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None):
+def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _renorm_pj = True):
     '''   
     returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
         f1: qubit dressed freq
@@ -562,9 +562,9 @@ def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None):
     PJ_Jsu_sum = PJ_Jsu.apply(sum, axis = 1)           # sum of participations as calculated by avg surf current 
     PJ_glb_sum = (s['U_E'] - s['U_H'])/(2*s['U_E'])    # sum of participations as calculated by global UH and UE  
     diff       = (PJ_Jsu_sum-PJ_glb_sum)/PJ_glb_sum*100# debug
-    if 1:  # Renormalize
+    if _renorm_pj:  # Renormalize
         PJs = PJ_Jsu.divide(PJ_Jsu_sum, axis=0).mul(PJ_glb_sum,axis=0)
-    else: PJs = PJ_Jsu
+    else: PJs = PJ_Jsu; print 'NO renorm'
     SIGN  = s.loc[:,s.keys().str.contains('sign_')]
     PJ    = np.mat(PJs.values)
     Om    = np.mat(np.diagflat(f0s)) 
@@ -607,6 +607,7 @@ class BbqAnalysis(object):
                 self.meta_data[variation]      = hdf[variation+'/meta_data']
             self.nmodes         = self.sols[variations[0]].shape[0] 
             self.meta_data      = DataFrame(self.meta_data)
+            self._renorm_pj     = True
     
     def get_solution_column(self, col_name, swp_var, sort = True): 
         ''' sort by variation -- must be numeric '''
@@ -629,12 +630,12 @@ class BbqAnalysis(object):
         
     def analyze_variation(self, variation = '0', print_results = True, 
                           cos_trunc = 6,  fock_trunc  = 7):
-        s         = self.sol[variation];   
-        meta_data = self.meta_datas[variation]
+        s         = self.sols[variation];   
+        meta_data = self.meta_data[variation]
         varz      = self.hfss_variables[variation]
         
         CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
-            eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
+            eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc, _renorm_pj = self._renorm_pj)
         
         if print_results:
             print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
