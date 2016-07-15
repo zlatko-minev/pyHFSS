@@ -15,9 +15,9 @@ import matplotlib.gridspec as gridspec;
 
 #file_name = u'C:\\Users\\rslqulab\\Desktop\\Lysander\\\\/pin_position_sweep(perfect conductor)_4-20-16/10. SHANTANU FAB 1 [April13 2016]/10. SHANTANU FAB 1 [April13 2016]_20160427_143612.hdf5'
 folder   = u'\\\\?\\C:\\Users\\rslqulab\\Desktop\\zkm\\2016_qm_jumps\\DiTransmon_Asymetric\\'
-folder  += u'qubit_separation_sweep(0-150microns)_6-1-16\\11. SHANTANU FAB SM22 Col 1 Row 9 Measured [May 6 2016]\\' ; import os; os.chdir(folder);
-filename = 'qubit_separation_sweep(0-150microns)_6-1-16';         #print os.listdir(folder )
-plot_title    = 'Qubit Separation Sweep (0-150 microns)'
+folder  += u'first_gen_ditransmon_inductance_sweep_7-14-16\\11. SHANTANU FAB SM22 Col 1 Row 9 Measured [May 6 2016]\\' ; import os; os.chdir(folder);
+filename = '11. SHANTANU FAB SM22 Col 1 Row 9 Measured [May 6 2016]_20160715_150421';         #print os.listdir(folder )
+plot_title    = 'B qubit inductance sweep'
 
 load_data   = True
 plot_Qs     = True
@@ -30,7 +30,7 @@ plt.close('all')
 
 if load_data:
     file_name = folder + filename + '.hdf5'
-    swp_var   = 'qubit_distance'
+    swp_var   = 'inductance_shift'
     bba = BbqAnalysis(file_name)
     hfss_variables = bba.hfss_variables
     sols           = bba.sols
@@ -48,21 +48,29 @@ if plot_Qs:
     ax.set_title('Qs- ' + plot_title); 
     ax.set_ylabel('Q'); 
     ax.set_yscale('log'); 
+    plt.grid('on')
     plt.gcf().savefig(folder + filename +' Q.png')
+    
     
 if plot_Fs:
     Fs  = bba.get_Fs(swp_var=swp_var)
     args = {'lw':0,'marker':'o','ms':5}
     Fs.plot(**args); plt.legend(['D', 'B','G' ], loc = 0)
+    
     ax = plt.gca();
     ax.set_xlabel(swp_var);
     ax.set_title('Frequencies- ' + plot_title); 
     ax.set_ylabel('F (GHz)'); 
-    plt.gcf().savefig(folder + filename + ' F.png')
+    
     plt.figure(); 
+    
     plt.subplot(311); Fs[0].plot(**args)
     plt.subplot(312); Fs[1].plot(**args)
     plt.subplot(313); Fs[2].plot(**args)
+    
+    plt.grid('on')
+    plt.gcf().savefig(folder + filename + ' F.png')
+    
         
         
 
@@ -71,24 +79,30 @@ if analyze_BBQ:
     RES = []; SWP = [];
     for key, s in sols.iteritems():
         print '\r Analyzing ', key,
-        varz  = hfss_variables[key]
-        SWP  += [ ureg.Quantity(varz['_'+swp_var]).magnitude ]  
-        RES  += [ eBBQ_Pmj_to_H_params(s, meta_datas[key], cos_trunc = cos_trunc, fock_trunc = fock_trunc) ]
-        
+        try:
+            varz  = hfss_variables[key]
+            SWP  += [ ureg.Quantity(varz['_'+swp_var]).magnitude ]  
+            RES  += [ eBBQ_Pmj_to_H_params(s, meta_datas[key], cos_trunc = cos_trunc, fock_trunc = fock_trunc) ]
+        except Exception as e:
+            print_color(" !ERROR %s" % e)
 #%%==============================================================================
 # Plot Chis
 #==============================================================================
+phi_zpfs = [r[-2]  for r in RES]
+
 if plot_chis:
-    fig, (ax1,ax2,ax3) = plt.subplots(3, 1, figsize = (10,6), sharex = True)    
+    fig, (ax1,ax2,ax3) = plt.subplots(3, 1, figsize = (10,6), sharex = True)  
     ax3.set_xlabel('Sweep '  + swp_var)
     args = {'lw':0,'marker':'o','ms':5}
     ID = 1; 
     ax1.plot(SWP, [r[ID][0,1]for r in RES], **args); ax1.set_ylabel('$\\chi_{DB}$')
-    ax2.plot(SWP, [r[ID][0,2]for r in RES], **args); ax2.set_ylabel('$\\chi_{DC}$') 
-    ax3.plot(SWP, [r[ID][1,2]for r in RES], **args); ax3.set_ylabel('$\\chi_{BC}$')
+    plt.grid('on')   
+    ax2.plot(SWP, [r[ID][0,2]for r in RES], **args); ax2.set_ylabel('$\\chi_{DC}$')        
+    ax3.plot(SWP, [r[ID][1,2]for r in RES], **args); ax3.set_ylabel('$\\chi_{BC}$')         
     ax1.set_title('Chi- ' + plot_title);     
     fig.tight_layout()
     fig.savefig(folder + filename + ' chis.png')
+    
     
     
 #%%

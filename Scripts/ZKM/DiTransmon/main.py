@@ -9,8 +9,8 @@ from bbq  import eBBQ_Pmj_to_H_params, print_color, print_matrix
 
 
 if 1:    
-    proj_name    = r'qubit_separation_sweep_dipole_moment_scale1.25_6-3-16' 
-    project_path = 'C:\\Users\rslqulab\Desktop\Lysander\\'
+    proj_name    = r'first_gen_ditransmon_inductance_sweep_7-14-16' 
+    project_path = 'C:\\Users\\rslqulab\\Desktop\\Lysander\\participation_ratio_project\\'
     #proj_name    = r'pin_shift_sweep(circuit=-1500microns_perfect conductor)_5-2-16' 
     #project_path = 'C:\\Users\\rslqulab\\Desktop\Lysander\\'
     app, desktop, project = load_HFSS_project(proj_name, project_path)
@@ -32,7 +32,7 @@ if 1:
 
 #%%
 if 1:
-    cos_trunc = 10;   fock_trunc  = 9;
+    cos_trunc = 20;   fock_trunc  = 7;
     CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz = \
         bba.analyze_variation(variation = '0', cos_trunc = cos_trunc,   fock_trunc  = fock_trunc)
 #    s         = sol[variation];   
@@ -47,18 +47,23 @@ if 1:
 #    print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
 #    print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
 #    print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
-    print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1','_LJ2'] })
+    #print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1','_LJ2'] })
 
 #%%==============================================================================
 #     Plot results for sweep
 #==============================================================================
 if 1:
-    swpvar='qubit_distance'    
+    swpvar='inductance_shift'    
+    use_1st_order = True  # use 1st O PT  to identify correct eigenvectors in ND
     RES = []; SWP = [];
-    for key, s in sol.iteritems():
-        varz  = hfss_variables[key]
-        SWP  += [ ureg.Quantity(varz['_'+swpvar]).magnitude ]  
-        RES  += [ eBBQ_Pmj_to_H_params(s, meta_datas[key], cos_trunc = cos_trunc, fock_trunc = fock_trunc) ]
+    for key, s in sol.iteritems():     
+        print '\r Analyzing ', key,
+        try:
+            varz  = hfss_variables[key]
+            SWP  += [ ureg.Quantity(varz['_'+swpvar]).magnitude ]  
+            RES  += [ eBBQ_Pmj_to_H_params(s, meta_datas[key], cos_trunc = cos_trunc, fock_trunc = fock_trunc, use_1st_order = use_1st_order) ]
+        except Exception as e:
+            print_color(" !ERROR %s" % e)
     import matplotlib.gridspec as gridspec;
     #%%
     fig = plt.figure(num = 1, figsize=(19,5)) 
@@ -126,6 +131,48 @@ if 1:
     ax8.axhspan(5.5,6.5, alpha =0.4, color= 'b')
     ax9.axhline(0.5,     alpha =0.4, color= 'b')
     fig.tight_layout()
+    
+
+    ID = 1;
+    fig, (ax7,ax8,ax9) = plt.subplots(3,1,sharex = True, num = 3, figsize=(6,7)) ; 
+    
+    #RES = RES0
+    args = {'lw':0,'marker':'o','ms':4}
+    ax7.plot(SWP, [r[ID][0,1]for r in RES], label = '$\\chi_{DB}$', c = 'b', **args); ax7.set_ylabel('$\\chi_{DB}$ (MHz)');
+    ax9.plot(SWP, [r[ID][0,2]for r in RES], label = '$\\chi_{DC}$', c = 'g', **args); ax9.set_ylabel('$\\chi_{DC}$ (MHz)');
+    ax8.plot(SWP, [r[ID][1,2]for r in RES], label = '$\\chi_{BC}$', c = 'r', **args); ax8.set_ylabel('$\\chi_{BC}$ (MHz)');
+    #RES = RES1
+    args = {'lw':0,'marker':'x','ms':10}
+    ax7.plot(SWP, [r[ID][0,1]for r in RES], label = '$\\chi_{DB}$', c = 'b', **args); ax7.set_ylabel('$\\chi_{DB}$ (MHz)');
+    ax9.plot(SWP, [r[ID][0,2]for r in RES], label = '$\\chi_{DC}$', c = 'g', **args); ax9.set_ylabel('$\\chi_{DC}$ (MHz)');
+    ax8.plot(SWP, [r[ID][1,2]for r in RES], label = '$\\chi_{BC}$', c = 'r', **args); ax8.set_ylabel('$\\chi_{BC}$ (MHz)');
+    ax9.set_xlabel(swpvar); ax7.set_title('cross-Kerr');   
+    #ax7.axhspan(85,150,  alpha =0.4, color= 'b')
+    ax8.axhspan(5.5,6.5, alpha =0.4, color= 'b')
+    ax9.axhline(0.5,     alpha =0.4, color= 'b')
+    
+    
+#%%
+if 1: # plot mesh
+    fig = plt.figure(8);  fig.clf()
+    tets = bba.get_convergences_max_tets()
+    varsz  = bba.get_variable_vs(swpvar)
+    Y = {}
+    for key in tets.keys():
+        Y[varsz[key]] = tets[key]
+    y =  pd.Series(Y ) #.values(), index = varsz.values())
+    y.plot(marker = '*', ms = 20)
+    ax7t = ax7.twinx()
+    ax7t.plot(y, marker = '*', ms = 10, c = 'g')
+#%%
+if 1:
+    fig = plt.figure(21); fig.clf()
+    tts = bba.get_convergences_Tets_vs_pass()
+    for key, x in tts.iteritems():
+        #np.log10(x).plot(label = varsz[key])
+        x.plot(label = varsz[key])
+    plt.legend(loc = 0)        
+    
 #%%
 if 0: 
     variation = '0';  pJ_method = 'J_surf_mag';

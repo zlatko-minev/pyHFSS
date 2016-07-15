@@ -93,7 +93,8 @@ class Bbq(object):
         self.setup_data()
         if self.verbose: print '       # Modes: ' + str(self.nmodes), '\n  # Variations: ' + str(self.nvariations)
         
-        self.get_latest_h5()
+        #self.get_latest_h5()
+        self.latest_h5_path = None
         if self.latest_h5_path is not None and self.append_analysis:
             latest_bbq_analysis = BbqAnalysis(self.latest_h5_path)
             if self.verbose: print 'Varied variables and values : ', latest_bbq_analysis.get_swept_variables(), \
@@ -423,7 +424,8 @@ class Bbq(object):
     def do_eBBQ(self, variations= None, plot_fig  = False, modes      = None,
                Pj_from_current  = True, junc_rect = [],    junc_lines = None,  junc_len = [],  junc_LJ_var_name = [],    
                dielectrics      = None, seams     = None,  surface    = False, 
-               calc_Hamiltonian = False,pJ_method =  'J_surf_mag'):
+               calc_Hamiltonian = False,pJ_method =  'J_surf_mag',
+               save_mesh_stats  = True):
         """               
             Pj_from_current:
                 Multi-junction calculation of energy participation ratio matrix based on <I_J>. Current is integrated average of J_surf by default: (zkm 3/29/16)
@@ -457,6 +459,7 @@ class Bbq(object):
         self.h5file     = hdf = pd.HDFStore(self.data_filename); 
         self.variations = variations;  self.modes = modes; self.njunc = len(junc_rect)
         meta_data['junc_rect'] = junc_rect; meta_data['junc_lines'] = junc_lines; meta_data['junc_len'] = junc_len; meta_data['junc_LJ_var_name'] = junc_LJ_var_name; meta_data['pJ_method'] = pJ_method;
+        mesh_stats = self.mesh_stats = []
 
         for ii, variation in enumerate(variations):
             print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1), bg = 44, newline = False )
@@ -513,7 +516,14 @@ class Bbq(object):
                                              = pd.DataFrame(var_sol_accum, index = modes)            
             hdf[variation+'/meta_data']      = self.meta_data[variation]  \
                                              = Series(meta_data)
-            if calc_Hamiltonian:  raise('Not implemented'); #for 1 junct: self.get_Hparams(freqs_bare_vals, self.pjs, lj))
+                                             
+            if save_mesh_stats:
+                msh = self.setup.get_mesh_stats(self.listvariations[ureg(variation)])
+                mesh_stats += [msh] 
+                if msh is not None:  hdf[variation+'/mesh_stats']  = msh   # returns dataframe 
+                conv = self.setup.get_convergence(self.listvariations[ureg(variation)])  # returns dataframe                 
+                #print 'conv.'
+                if conv is not None: hdf[variation+'/convergence'] =  conv
             
         self.h5file.close()
         self.bbq_analysis = BbqAnalysis(self.data_filename, variations=self.variations)
@@ -540,12 +550,12 @@ def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7):
             fzpfs[junc, mode] = np.sqrt(PJ[mode,junc] * Om[mode,mode] /  EJ[junc,junc] ) #*0.001
     fzpfs = fzpfs * SIGN.T
     
-    H     = bbq_hmt(freqs*10**9, LJs.astype(np.float), fqr*fzpfs, cos_trunc, fock_trunc)
-    f1s, CHI_ND, fzpfs, f0s  = make_dispersive(H, fock_trunc, fzpfs, freqs)  # f0s = freqs
+    Hs = bbq_hmt(freqs*10**9, LJs.astype(np.float), fqr*fzpfs, cos_trunc, fock_trunc, individual = use_1st_order)
+    f1s, CHI_ND, fzpfs, f0s  = make_dispersive(Hs, fock_trunc, fzpfs, freqs,use_1st_order = use_1st_order)  # f0s = freqs
     CHI_ND= -1*CHI_ND *1E-6;
     return f1s, CHI_ND, fzpfs, f0s;
     
-def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _renorm_pj = True):
+def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _renorm_pj = True, use_1st_order = False):
     '''   
     returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
         f1: qubit dressed freq
@@ -573,7 +583,7 @@ def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _ren
     CHI_O1= divide_diagonal_by_2(CHI_O1)            # Make the diagonals alpha 
     f1s   = f0s - np.diag(CHI_O1)                   # 1st order PT expect freq to be dressed down by alpha 
     if cos_trunc is not None:
-        f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc)                
+        f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc, use_1st_order = use_1st_order)                
     else: CHI_ND, fzpfs = None, None
     return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs
     # the return could be made clener, or dictionary 
@@ -601,14 +611,60 @@ class BbqAnalysis(object):
             self.hfss_variables = {}
             self.sols           = {}
             self.meta_data      = {}
+            self.mesh_stats     = {}
+            self.convergence    = {}
             for variation in variations:
-                self.hfss_variables[variation] = hdf[variation+'/hfss_variables']
-                self.sols[variation]           = hdf[variation+'/eBBQ_solution']  
-                self.meta_data[variation]      = hdf[variation+'/meta_data']
+                try:
+                    self.hfss_variables[variation] = hdf[variation+'/hfss_variables']
+                    self.sols[variation]           = hdf[variation+'/eBBQ_solution']  
+                    self.meta_data[variation]      = hdf[variation+'/meta_data']
+                    self.mesh_stats[variation]     = hdf[variation+'/mesh_stats']
+                    self.convergence[variation]    = hdf[variation+'/convergence']  # TODO: better way to handle errors 
+                except Exception  as e:
+                    print_color('Error in variation ' + str(variation))                    
+                    print_color(e)
             self.nmodes         = self.sols[variations[0]].shape[0] 
             self.meta_data      = DataFrame(self.meta_data)
             self._renorm_pj     = True
+            
+    def get_variable_vs(self, swpvar):
+        ret = {}
+        for key, varz in self.hfss_variables.iteritems():
+            ret[key] = ureg.Quantity(varz['_'+swpvar]).magnitude  
+        return ret
+        
+    def get_convergences_max_tets(self):
+        ''' Index([u'Pass Number', u'Solved Elements', u'Max Delta Freq. %' ])  '''
+        ret = {}
+        for key, df in self.convergence.iteritems():
+            ret[key] = df['Solved Elements'].iloc[-1]
+        return ret
+        
+    def get_convergences_Tets_vs_pass(self):
+        ''' Index([u'Pass Number', u'Solved Elements', u'Max Delta Freq. %' ])  '''
+        ret = {}
+        for key, df in self.convergence.iteritems():
+            s = df['Solved Elements']
+            #s.index = df['Pass Number']
+            ret[key] = s
+        return ret
+        
+    def get_convergences_MaxDeltaFreq_vs_pass(self):
+        ''' Index([u'Pass Number', u'Solved Elements', u'Max Delta Freq. %' ])  '''
+        ret = {}
+        for key, df in self.convergence.iteritems():
+            s = df['Max Delta Freq. %']
+            #s.index = df['Pass Number']
+            ret[key] = s
+        return ret
+        
     
+    def get_mesh_tot(self):
+        ret = {}
+        for key, m in self.mesh_stats.iteritems():
+            ret[key] = m['Num Tets  '].sum()
+        return ret
+        
     def get_solution_column(self, col_name, swp_var, sort = True): 
         ''' sort by variation -- must be numeric '''
         Qs, swp = [], []       
