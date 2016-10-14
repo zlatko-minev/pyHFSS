@@ -16,7 +16,7 @@ import matplotlib.gridspec as gridspec;
 #file_name = u'C:\\Users\\rslqulab\\Desktop\\Lysander\\\\/pin_position_sweep(perfect conductor)_4-20-16/10. SHANTANU FAB 1 [April13 2016]/10. SHANTANU FAB 1 [April13 2016]_20160427_143612.hdf5'
 folder   = u'\\\\?\\C:\\Users\\rslqulab\\Desktop\\zkm\\2016_qm_jumps\\DiTransmon_Asymetric\\'
 folder  += u'first_gen_ditransmon_inductance_sweep_7-14-16\\11. SHANTANU FAB SM22 Col 1 Row 9 Measured [May 6 2016]\\' ; import os; os.chdir(folder);
-filename = '11. SHANTANU FAB SM22 Col 1 Row 9 Measured [May 6 2016]_20160715_150421';         #print os.listdir(folder )
+filename = '11. SHANTANU FAB SM22 Col 1 Row 9 Measured [May 6 2016]_20160718_112711';         #print os.listdir(folder )
 plot_title    = 'B qubit inductance sweep'
 
 load_data   = True
@@ -36,43 +36,6 @@ if load_data:
     sols           = bba.sols
     meta_datas     = bba.meta_data
 
-#%%==============================================================================
-# Plot Qs
-#==============================================================================
-if plot_Qs:
-    Qs  = bba.get_Qs(swp_var=swp_var)
-    args = {'lw':0,'marker':'o','ms':5}
-    Qs.plot(**args); plt.legend(['D', 'B','G' ], loc = 0)
-    ax = plt.gca();
-    ax.set_xlabel(swp_var);
-    ax.set_title('Qs- ' + plot_title); 
-    ax.set_ylabel('Q'); 
-    ax.set_yscale('log'); 
-    plt.grid('on')
-    plt.gcf().savefig(folder + filename +' Q.png')
-    
-    
-if plot_Fs:
-    Fs  = bba.get_Fs(swp_var=swp_var)
-    args = {'lw':0,'marker':'o','ms':5}
-    Fs.plot(**args); plt.legend(['D', 'B','G' ], loc = 0)
-    
-    ax = plt.gca();
-    ax.set_xlabel(swp_var);
-    ax.set_title('Frequencies- ' + plot_title); 
-    ax.set_ylabel('F (GHz)'); 
-    
-    plt.figure(); 
-    
-    plt.subplot(311); Fs[0].plot(**args)
-    plt.subplot(312); Fs[1].plot(**args)
-    plt.subplot(313); Fs[2].plot(**args)
-    
-    plt.grid('on')
-    plt.gcf().savefig(folder + filename + ' F.png')
-    
-        
-        
 
 #%% 
 if analyze_BBQ:  
@@ -88,6 +51,60 @@ if analyze_BBQ:
 #%%==============================================================================
 # Plot Chis
 #==============================================================================
+if plot_Fs:
+    #Fs  = bba.get_Fs(swp_var=swp_var)
+    Fs = []
+    for i in range(len(RES)):
+        Fs.append(RES[i][9])
+        
+    plt.plot(sorted(SWP), np.array(Fs).transpose()[0]*10**-9, label='D mode freq', marker = 'o', lw =1)
+    plt.plot(sorted(SWP), np.array(Fs).transpose()[1]*10**-9, label='B mode freq', marker = 'o', lw =1)
+    
+    plt.title('D and B mode frequencies (nonlinear)');
+    plt.xlabel(swp_var);
+    plt.ylabel('F (GHz)');
+    plt.legend(loc=0)
+    plt.grid()
+    '''
+    Fs   = [r[9][:2]*10**-9 for r in RES]
+    args = {'lw':0,'marker':'o','ms':5}
+    Fs.plot(**args); plt.legend(['D', 'B','G' ], loc = 0)
+    
+    ax = plt.gca();
+    ax.set_xlabel(swp_var);
+    ax.set_title('Frequencies- ' + plot_title); 
+    ax.set_ylabel('F (GHz)'); 
+    
+    plt.figure(); 
+    
+    plt.subplot(311); Fs[0].plot(**args)
+    plt.subplot(312); Fs[1].plot(**args)
+    plt.subplot(313); Fs[2].plot(**args)
+    
+    plt.grid('on')
+    plt.gcf().savefig(folder + filename + ' F.png')'''
+    
+    
+#%%==============================================================================
+# Plot Qs
+#==============================================================================
+if plot_Qs:
+    Qs  = bba.get_Qs(swp_var=swp_var)
+    args = {'lw':0,'marker':'o','ms':5}
+    Qs.plot(**args); plt.legend(['D', 'B','G' ], loc = 0)
+    ax = plt.gca();
+    ax.set_xlabel(swp_var);
+    ax.set_title('Qs- ' + plot_title); 
+    ax.set_ylabel('Q'); 
+    ax.set_yscale('log'); 
+    plt.grid('on')
+    plt.gcf().savefig(folder + filename +' Q.png')
+
+    
+        
+        
+
+
 phi_zpfs = [r[-2]  for r in RES]
 
 if plot_chis:
