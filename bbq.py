@@ -168,6 +168,8 @@ class Bbq(object):
             freqs_bare_vals.append(1e9*freqs[m])
             if kappa_over_2pis is not None:
                 freqs_bare_dict['Q_'+str(m)] = freqs[m]/kappa_over_2pis[m]
+            else:
+                freqs_bare_dict['Q_'+str(m)] = 0
         self.freqs_bare = freqs_bare_dict
         self.freqs_bare_vals = freqs_bare_vals
         return freqs_bare_dict, freqs_bare_vals
@@ -534,12 +536,13 @@ class Bbq(object):
         return
     
 
-def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7):
+def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7, use_1st_order = False):
     ''' numerical diagonalizaiton for energy BBQ
         fzpfs: reduced zpf  ( in units of \phi_0
     '''    
     assert(all(freqs<1E6)), "Please input the frequencies in GHz"
     assert(all(LJs  <1E-3)),"Please input the inductances in Henries"
+    assert((PJ   >0).any()),"ND -- PJs are not all > 0; \n %s" % (PJ)
     
     import bbqNumericalDiagonalization
     from bbqNumericalDiagonalization import bbq_hmt, make_dispersive, fqr
@@ -575,6 +578,14 @@ def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _ren
     if _renorm_pj:  # Renormalize
         PJs = PJ_Jsu.divide(PJ_Jsu_sum, axis=0).mul(PJ_glb_sum,axis=0)
     else: PJs = PJ_Jsu; print 'NO renorm'
+    
+    if (PJs < 0).any().any() == True: 
+        print "\n\n**************\n\n"
+        print_color("warning / error!!!  Some PJ was found <=0. This is prob numerical error.  taking the abs value.  Rerun with more precision. inspect. do due dilligence.)")
+        print PJs
+        print "\n\n**************\n\n"
+        PJs = np.abs(PJs)
+        
     SIGN  = s.loc[:,s.keys().str.contains('sign_')]
     PJ    = np.mat(PJs.values)
     Om    = np.mat(np.diagflat(f0s)) 
@@ -584,7 +595,8 @@ def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _ren
     f1s   = f0s - np.diag(CHI_O1)                   # 1st order PT expect freq to be dressed down by alpha 
     if cos_trunc is not None:
         f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc, use_1st_order = use_1st_order)                
-    else: CHI_ND, fzpfs = None, None
+    else: 
+        CHI_ND, fzpfs = None, None
     return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs
     # the return could be made clener, or dictionary 
 
@@ -679,13 +691,16 @@ class BbqAnalysis(object):
         return self.get_solution_column('modeQ', swp_var, sort)
         
     def get_Fs(self, swp_var, sort = True):
+        ''' this returns the linear frequencies that HFSS gives'''
         return self.get_solution_column('freq', swp_var, sort)
+    
         
     def get_junc_rect_names(self):
         return self.meta_data.loc['junc_rect',:]
         
     def analyze_variation(self, variation = '0', print_results = True, 
-                          cos_trunc = 6,  fock_trunc  = 7):
+                          cos_trunc = 6,  fock_trunc  = 7,
+                          frmt = "{:7.2f}"):
         s         = self.sols[variation];   
         meta_data = self.meta_data[variation]
         varz      = self.hfss_variables[variation]
@@ -693,13 +708,21 @@ class BbqAnalysis(object):
         CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
             eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc, _renorm_pj = self._renorm_pj)
         
-        if print_results:
+        if print_results: ##TODO: generalize to more modes
             print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
             #print '\nCHI_O1=\t PT. [alpha diag]'; print_matrix(CHI_O1,append_row ="MHz" )
-            print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
-            print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
-            print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
-            print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
+            print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz", frmt = frmt)
+            if len(f0s) == 3:
+                print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
+                print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
+                print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
+            else:
+                print "* "*5, "Eigen (linear) Frequencies MHz", "* "*5
+                print pd.Series(f0s*1E3)
+                print "* "*5, "Dressed freqs Frequencies MHz", "* "*5  # these are the ND if ND was used, else it is the O1PT
+                print pd.Series(f1s*1E-6)
+                print "* "*5, "Eigen (linear) Qs ", "* "*5
+                print pd.Series(Qs)  # Q =0 means no dissipation used in sim.
         return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz
             
     @deprecated  
