@@ -96,7 +96,7 @@ def release():
     time.sleep(0.1)
     refcount = pythoncom._GetInterfaceCount()
     if refcount > 0:
-        print "Warning! %d COM references still alive"
+        print "Warning! %d COM references still alive" % (refcount)
         print "HFSS will likely refuse to shut down"
 
 class COMWrapper(object):
