@@ -1063,6 +1063,7 @@ class HfssFieldsCalc(COMWrapper):
         """
         :type setup: HfssSetup
         """
+        self.setup = setup
         super(HfssFieldsCalc, self).__init__()
         self.parent = setup
         self.Mag_E = NamedCalcObject("Mag_E", setup)
@@ -1079,8 +1080,24 @@ class HfssFieldsCalc(COMWrapper):
         self.ComplexMag_Jvol = NamedCalcObject("ComplexMag_Jvol", setup)
         self.P_J = NamedCalcObject("P_J", setup)
 
+        self.named_expression = {} #dictionary to hold additional named expressions
+
     def clear_named_expressions(self):
         self.parent.parent._fields_calc.ClearAllNamedExpr()
+
+    def declare_named_expression(self, name):
+        """"
+        If a named epression has been created in the fields calculator, this
+        function can be called to initialize the name to work with the fields object
+        """
+        self.named_expression[name] = NamedCalcObject(name, self.setup)
+
+    def use_named_expression(self, name):
+        """
+        Expression can be used to access dictionary of named expressions,
+        Alternately user can access dictionary directly via named_expression()
+        """
+        return self.named_expression[name]
 
 class CalcObject(COMWrapper):
     def __init__(self, stack, setup):
@@ -1162,6 +1179,7 @@ class CalcObject(COMWrapper):
         return self._unary_op("ScalarZ")
 
     def norm_2(self):
+
         return (self.__mag__()).__pow__(2)        
         #return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
 
