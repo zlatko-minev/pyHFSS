@@ -569,7 +569,8 @@ def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _ren
     import  scipy;    Planck  = scipy.constants.Planck
     f0s        = np.array( s['freq'] )
     Qs         = s['modeQ']
-    LJs        = np.array(meta_data['LJs'].values())                     # LJ in H
+    LJ_nms     = meta_data['junc_LJ_var_name']# ordered
+    LJs        = np.array([meta_data['LJs'][nm] for nm in LJ_nms]) # LJ in Henries, must make sure these are given in the right order
     EJs        = (fluxQ**2/LJs/Planck*10**-9).astype(np.float)        # EJs in GHz
     PJ_Jsu     = s.loc[:,s.keys().str.contains('pJ')]  # EPR from Jsurf avg
     PJ_Jsu_sum = PJ_Jsu.apply(sum, axis = 1)           # sum of participations as calculated by avg surf current 
