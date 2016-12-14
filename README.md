@@ -1,6 +1,6 @@
-# pyEPR: Energy Participation Ratio Approach to Quantum Circuits 
-Authors (alphabetical): Zaki Leghtas & Zlatko Minev.
-Short about pyEPR here. Key features here.
+# pyEPR: Energy Participation Ratio Approach to Quantum Circuits   
+Authors (alphabetical): Zaki Leghtas & Zlatko Minev.   
+Short about pyEPR here. Key features here.   
 
 
 ## Installation
