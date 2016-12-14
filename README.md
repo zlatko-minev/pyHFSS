@@ -1,124 +1,69 @@
-Requirements
-------
-Pandas 0.18
-Pint 
+# pyEPR: Energy Participation Ratio Approach to Quantum Circuits 
+Authors (alphabetical): Zaki Leghtas & Zlatko Minev.
+Short about pyEPR here. Key features here.
 
-Energy participation BBQ
-======
-Zlatko's eBBQ setup tips for Eigenmode simulation 
 
-1. Geometry & B.C. definitions:
-1A.  Define junction rectangles & boundary condition. E.g. rectangle name: juncV. Define the lenght of the junction and junction Lj by a local variable; e.g., junc_len and LJ_V.   It is good to keep the junc rectangle on the order of 50 x 100 um. 
-1B. Define junction line to define current flow direction (polyline). Make it a dmodel objecta and make sure it spans the length of the junction, so use the same variables to define it. Tip: Define an Object coordinate axis before you make the polyline, which is based on the junc rect (e.g., juncV); then define the polyline in the Object CS ( make sure to give the CS a proper name juncV_cs). Now, give the polyline a good name: E.g.,juncV_line.
-4. Meshing tips:
-4A. Lighly mesh the pads and junc rectangles with roughly 4 initial tets across the smallest dimension. 
+## Installation
+-------------
+If you have a python 2.7 enviornment setup, with qutip installed, fork the repository and keep up to date with SourceTee. If you are starting from scratch, follow the guide below.
+
+##### Installation on windows from scratch.
+Recommended procedure. 
+1. Install [Anaconda CE](https://www.continuum.io/downloads) (Python XY would work too, but we will follow the CE install). This is your python environment.  64 bit or 32 bit should work---32 bit tends to lead to less installation conflicts. If there is a previous Python install, either delete it, or in your System Path variable set the Anaconda search path at the top. Install in C:\Anaconda2
+2. Install required packages, from a command prompt (terminal):
+```sh
+        pip install pint 
+        conda install pandas
+```
+3. Install [Qutip](http://qutip.org/), which is used in dealing with quantum objects. Follow the instruction on their website, or the rest of this bullet. Qutip is only required to do more complicated quantum analysis on the data from HFSS.
+First, you need to install a C compiler, since Qutip uses Cython. If you dont have VS9, gcc, or mingw installed, the following works:
+```sh
+        pip install -i https://pypi.anaconda.org/carlkl/simple mingwpy
+```
+This is the compiler anaconda will use. Let anaconda know to use it by creating the file C:\Anaconda2\Lib\distutils\distutils.cfg with the following content
+```
+    [build]
+    compiler = mingw32    
+    [build_ext]
+    compiler = mingw32
+```
+Next, install qutip, you can choose to use conda intall or pip install, or pull from the git directly
+```sh
+        conda install git
+        pip install git+https://github.com/qutip/qutip.git
+ ```
+ 4. Use [SourceTree](https://www.sourcetreeapp.com/) or git to fork this repository.
+ 5. Add the repository folder to your python search path. 
+ 6. Edit the config.py  to set the data saving directory correctly. :+1:  
+  
+ 
+##### Installation on Mac/Linux from scratch.
+Follow the windows instructions, but dont install mingw and make distutils.cfg, your distribution should come with gcc as the default compiler. 
+
+## HFSS Setup for EPR 
+-------------
+Eigenmode setup tips
+1. Geometry & boundary condition (BC) definitions.
+  1.1 Define junction rectangles & boundary condition. E.g. create a rectangle for the Josephson junction, name it "junc1" (for instance). Define its length, which youll put into the script, and give it a lumped RLC BC with a local variable "Lj1" (for instance) for the inductance. This name will be input into the script.   Recomended junc rectangle size is 50 x 100 um, and much smaller will work as well. 
+  1.2 Over this rectangle draw a model polyline to define current flow direction. It should spans the length of the junc. rectangle, and be defined ny the same variables to used to define junc1---so that they move together if the geometry is altered. 
+  1.2 Tip: Define an object coordinate axis before you make the polyline, which is based on the junc rect, junc1. Next, define the polyline in the Object CS ( make sure to give the CS a proper name, such as junc1_cs). Next, name the polyline sinsibly; e.g., "junc1_line."
+4. Meshing.
+ 4.1 Lighly mesh the pads and junc rectangles with roughly 4 initial tets across the smallest dimension. 
 5. Simulation setup 
-5A. Advisable, not necessary to used mixed order solutions. 
+ 5.1 Advisable, not necessary to used mixed order solutions. 
 
-pyHFSS
-======
+## Features
+---------------------
+TBA
 
-HFSS scripting interface in python
-
-Create a Design
----------------
-
-```python
-from hfss import get_active_project
-proj = get_active_project()
-design = proj.new_dm_design("Test")
-```
-    
-Or Get an Existing Design
--------------------------
-
-```python
-from hfss import get_active_design
-design = get_active_design()
-```
-
-Creating Variables
-------------------
-
-```python
-bx = design.set_variable("Box_X", "3mm")
-by = design.set_variable("Box_Y", "6mm")
-bz = design.set_variable("Box_Z", "1mm")
-```
-    
-
-3D Modeler
-----------
-
-```python
-modeler = design.modeler
-modeler.draw_box_center([0,0,0], [bx, by, bz], material="silicon")
-```
-
-Setup Analysis
---------------
-
-```python
-setup = design.create_dm_setup(freq_ghz=5)
-sweep = setup.insert_sweep(4, 10, count=1000)
-setup.analyze()
-freqs, (S12, Y11) = sweep.get_network_data("S12,Y11")
-```
-
-Fields Calculator
------------------
-
-```python
-fields = setup.get_fields()
-Mag_E_Sq = fields.Mag_E ** 2
-Surface_E = Mag_E_Sq.integrate_surf("Object Name")
-print Surface_E.evaluate()
-```
-
-
-Keyword Arguments for Drawing Commands
---------------------------------------
-
-  - name: str
-  - nonmodel: bool
-  - color: (int, int, int) each in [0...255]
-  - transparency: float in [0, 1]
-  - material: str (matching existing material name)
-
-HFSS refuses to close
+## Troubleshooting
 ---------------------
 
-If your script terminates improperly, this can happen. pyHFSS tries to
-catch termination events and handle them. Your safety should be
-guaranteed however, if you call `hfss.release()` when you have finished
+###### COM Error on opening HFSS 
+Check the project and design file names carefully. Make sure that the filepath doesnt have apostrophies or other bad charecters, such as in C:\\Minev's PC\\my:Project.  Check that HFSS hasn't popped up an error dialogue, such as "File locked." Manually open HFSS and the file. 
 
-Requires
----------------------
+###### COM error on calculation of expression
+Either HFSS popped an error dialogue, froze up, or you mistyped the name of something. 
 
-pint     - pip install pint
-pandas   - conda install pandas
-
-do_BBQ:
----------------------
-    calculate_H:  
-        True: 1 junction method of Pj calculation based on U_H-U_E global. 
-        
-    Pj_from_current:
-        Multi-junction calculation of energy participation ratio matrix based on <I_J>. Current is integrated average of J_surf by default: (zkm 3/29/16)
-        Will calculate the Pj matrix for the selected modes for the given junctions junc_rect array & length of juuncs
-        
-        junc_rect = ['junc_rect1', 'junc_rect2'] name of junc rectangles to integrate H over
-        junc_len = [0.0001]   specify in SI units; i.e., meters
-        junc_LJ_var_name = ['LJ1', 'LJ2']
-        pJ_method = 'J_surf_mag'   - currently only 1 implemented - takes the avg. Jsurf over the rect. Make sure you have seeded lots of tets here. i recommend starting with 4 across smallest dimension.
-
-        Assumptions:
-            Low dissipation (high-Q). 
-            Right now, we assume that there are no lumped capcitors to simply calculations. Not required. 
-            We assume that there are only lumped inductors, so that U_tot = U_E+U_H+U_L    and U_C =0, so that U_tot = 2*U_E;
-        Results in:
-            self.PJ_multi_sol - a Pandas DataFrame of all the information
-    
-    Other parameters:
-        seams = ['seam1', 'seam2']  (seams needs to be a list of strings)
-        variations = ['0', '1']
+###### HFSS refuses to close
+If your script terminates improperly, this can happen. pyHFSS tries to catch termination events and handle them. Your safety should be guaranteed however, if you call `hfss.release()` when you have finished. Use the Taskmanager (Activity Monitor on MAC) to kill HFSS if you want.
