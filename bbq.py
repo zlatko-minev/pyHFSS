@@ -13,8 +13,8 @@ from stat import S_ISREG, ST_CTIME, ST_MODE
 from pandas import HDFStore, Series, DataFrame
 from pint import UnitRegistry
 
-from .hfss    import *
-from .toolbox import *
+from hfss    import *
+from toolbox import *
 from config_bbq import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
 
 ### Definitions 
