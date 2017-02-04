@@ -1,50 +1,66 @@
-# pyEPR: Energy Participation Ratio Approach to Quantum Circuits   
-Zlatko Minev & Zaki Leghtas.    
-Short about pyEPR here. Key features here.   
+Welcome to pyEPR!
+===================
+###Energy-Participation-Ratio (EPR) Design of Quantum Circuits. 
+#####By Zlatko Minev & Zaki Leghtas.    
+
+pyEPR is ... and is amazing because ...  (short blurb about pyEPR here). 
+
+$$
+\hat H_{\mathrm{full}} = \hat H_{\mathrm{lin}}  + \hat H_{\mathrm{nl}} 
+$$
+
+# Features
+---------------------
+TBA   
 
 
 ## Installation
 -------------
-If you are starting from scratch, follow the installation guide below to setup your Python 2.7 enviornment and fork this repository. To keep up to date, you may use SourceTee git-gui manager. 
+If you are starting from scratch, follow the installation guide below to setup a Python 2.7 environment and fork this repository. To keep up to date, you may use SourceTree, a git-gui manager. 
 
-##### Installation on windows from scratch.
 **Recommended procedure.**   <br /> 
-1. Install a Python environment.  
 
-   We recommend [Anaconda CE](https://www.continuum.io/downloads), and have tested this installation procedure with Anaconda v4.2; other environments, such as Python XY, have worked as well. The 32 bit version lead to less installation hassle. Install in "C:\Anaconda2".  
-   If you have a previous Python install, either delete it or in your "System Path" variable set this new Anaconda path at the top. 
-   
-2. Install required packages, from a command prompt (terminal):   
+ 1. Install a Python 2.7 environment.  
+ * We recommend [Anaconda CE](https://www.continuum.io/downloads), and have tested this installation procedure with Anaconda v4.2 32-bit edition. Other environments, such as Python XY, and 64 bit work as well, but are not recommend. Install Anaconda in "C:\Anaconda2".
+ * Set the Windows System PATH variable. In Control Panel, search for Environment Variables (in System), and open it. In the section System Variables, find the PATH environment variable and select it. Click Edit.  Place`C:\Anaconda2;C:\Anaconda2\Scripts;C:\Anaconda2\Library\bin;` at the beginning. If you have a previous Python installation this step is *very* important, especially to compile the qutip module. You may verity your path using the following command in the Command Prompt (terminal):
+    ``` sh
+    $ echo %PATH%
+    ```  
+    
+ 2. Install required packages, form a terminal
+ ```sh 
+ pip install pint
+ conda install pandas
+ ```
+ 3. Fork this pyEPR repository on GitHub with your GitHub account. You may clone the fork to your PC and manage it using the [SourceTree](https://www.sourcetreeapp.com/) git-gui manager.
+ 4. Add the pyEPR repository folder to your python search path.
+ 5. Edit pyEPR module `config.py`  to set your data-saving directory and other parameters of interest.   
+ 6. **ENJOY! **  :+1:  
+
+#### Note for Mac/Linux.   
+Follow the same instructions above. You shouldn't have to install mingw or modify distutils.cfg, since your distribution should come with gcc as the default compiler.    
+
+####Optional package installation
+You may also choose to install the optional qutip package for some advanced analysis. 
+
+Optionally, you may install [Qutip](http://qutip.org/), used in handling quantum objects. Follow the instruction on their website, or the rest of this bullet. Here, we summarize trick points in this. First, you need to install a C compiler, since Qutip uses Cython. If you dont have VS9, gcc, or mingw installed, the following works:   
 ```sh
-        pip install pint 
-        conda install pandas
-```   
-3. Install [Qutip](http://qutip.org/), which is used in dealing with quantum objects. Follow the instruction on their website, or the rest of this bullet. Qutip is only required to do more complicated quantum analysis on the data from HFSS.   
-First, you need to install a C compiler, since Qutip uses Cython. If you dont have VS9, gcc, or mingw installed, the following works:   
-```sh
-        pip install -i https://pypi.anaconda.org/carlkl/simple mingwpy
-```   
-This is the compiler anaconda will use. Let anaconda know to use it by creating the file C:\Anaconda2\Lib\distutils\distutils.cfg with the following content   
+	pip install -i https://pypi.anaconda.org/carlkl/simple mingwpy
+```
+Let anaconda know to use this compiler by creating the file `C:\Anaconda2\Lib\distutils\distutils.cfg` with the following content   
 ```
     [build]
     compiler = mingw32    
     [build_ext]
     compiler = mingw32
 ```   
-Next, install qutip, you can choose to use conda intall or pip install, or pull from the git directly   
+Next, let's install qutip. You can choose to use conda intall or pip install, or pull from the git directly  as done here: 
 ```sh
         conda install git
         pip install git+https://github.com/qutip/qutip.git
- ```
-4. Fork the pyEPR repository. This may be done using the [SourceTree](https://www.sourcetreeapp.com/) GUI, or some other git manager.
-5. Add the pyEPR repository folder to your python search path.    
-6. Edit the config.py  to set the data saving directory correctly. :+1:     
-  
- 
-##### Installation on Mac/Linux from scratch.   
-Follow the windows instructions, but dont install mingw and make distutils.cfg, your distribution should come with gcc as the default compiler.    
+```
 
-## HFSS Setup for EPR 
+## pyEPR Project Setup in HFSS
 -------------
 Eigenmode setup tips   
 1. Geometry & boundary condition (BC) definitions.   
@@ -56,9 +72,6 @@ Eigenmode setup tips
 5. Simulation setup    
  5.1 Advisable, not necessary to used mixed order solutions.    
 
-## Features
----------------------
-TBA   
 
 ## Troubleshooting
 ---------------------
