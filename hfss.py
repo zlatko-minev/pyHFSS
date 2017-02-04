@@ -1296,12 +1296,28 @@ def get_report_arrays(name):
     r = HfssReport(d, name)
     return r.get_arrays()
     
-def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  #2016 version 
+def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  # aedt is for 2016 version 
     ''' proj_name == None => get active. 
-        (make sure 2 run as admin) '''
+        (make sure 2 run as admin) 
+    '''
+    
+    # Checks
+    assert os.path.isdir(project_path),   "ERROR! project_path is not a valid directory. Check the path, and especially \\ charecters."  
+    
     project_path +=  proj_name + extension
+    
+    if os.path.isfile(project_path):
+        print '  Success: File path to HFSS project found.'
+    else:
+        raise Exception("ERROR! Valid directory, but invalid project filename. Not found! Please check your filename.\n%s\n" % project_path )
+    
+    if os.path.isfile(project_path+'.lock'):
+        print '   Warning: File is locked. Open may fail. Delete .lock.'    
+        
     app     = HfssApp()
+    print "   Success: Opened HfssApp."
     desktop = app.get_app_desktop()
+    print "   Success: Opened Hfss desktop."
     if proj_name is not None:
         if proj_name in desktop.get_project_names():
             desktop.set_active_project(proj_name)    
@@ -1310,6 +1326,7 @@ def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  #2016 vers
             project = desktop.open_project(project_path) 
     else: 
         project = desktop.get_active_project()
+    print "   Success: Opened link to HFSS user project."
     return app, desktop, project
     
 
