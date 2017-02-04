@@ -533,6 +533,7 @@ class Bbq(object):
 #        if plot_fig:
 #            self.bbq_analysis.plot_Hparams(modes=self.modes)
 #            self.bbq_analysis.print_Hparams(modes=self.modes)
+        print "\n\nCOMPLETE: do_eBBQ.\n"
         return
     
 
@@ -710,19 +711,25 @@ class BbqAnalysis(object):
             eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc, _renorm_pj = self._renorm_pj)
         
         if print_results: ##TODO: generalize to more modes
-            print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
-            #print '\nCHI_O1=\t PT. [alpha diag]'; print_matrix(CHI_O1,append_row ="MHz" )
-            print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz", frmt = frmt)
+            print '\nPJ=\t(renorm.)'  
+            print_matrix(PJ*SIGN, frmt = "{:7.4f}")
+            print "\n","* "*5, "CHI matrix (MHz)", "* "*5
+            if cos_trunc is not None:
+                print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc)
+                print_matrix(CHI_ND, append_row ="MHz", frmt = frmt)
+            else:
+                print '\nCHI_O1=\t [alpha diag]'
+                print_matrix(CHI_O1, append_row ="MHz", frmt = frmt)
             if len(f0s) == 3:
                 print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
                 print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   
                 print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
             else:
-                print "* "*5, "Eigen (linear) Frequencies MHz", "* "*5
-                print pd.Series(f0s*1E3)
-                print "* "*5, "Dressed freqs Frequencies MHz", "* "*5  # these are the ND if ND was used, else it is the O1PT
-                print pd.Series(f1s*1E-6)
-                print "* "*5, "Eigen (linear) Qs ", "* "*5
+                print "\n","* "*5, "Eigen (Linear) vs Dressed Frequencies MHz", "* "*5
+                print pd.DataFrame(np.array([f0s*1E3,f1s*1E3]).transpose(), columns = ['Linear', 'Dressed'])
+                #print "\n", "* "*5, "Dressed freqs Frequencies MHz", "* "*5  # these are the ND if ND was used, else it is the O1PT
+                #print 
+                print "\n","* "*5, "Eigen (linear) Qs ", "* "*5
                 print pd.Series(Qs)  # Q =0 means no dissipation used in sim.
         return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz
             
