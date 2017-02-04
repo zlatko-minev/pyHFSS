@@ -1,20 +1,19 @@
 # pyEPR: Energy Participation Ratio Approach to Quantum Circuits   
-Authors (alphabetical): Zaki Leghtas & Zlatko Minev.   
+Zlatko Minev & Zaki Leghtas.    
 Short about pyEPR here. Key features here.   
 
 
 ## Installation
 -------------
-If you have a python 2.7 enviornment setup, with qutip installed, fork the repository and keep up to date with SourceTee. If you are starting from scratch, follow the guide below.
+If you are starting from scratch, follow the installation guide below to setup your Python 2.7 enviornment and fork this repository. To keep up to date, you may use SourceTee git-gui manager. 
 
 ##### Installation on windows from scratch.
-Recommended procedure.   
-1. Install a Python Environment. 
-We recommend[Anaconda CE](https://www.continuum.io/downloads) and have tested the installation procedure with Anaconda v4.2. 
-We remark that other env., such as Python XY, have worked as well. 
-We recommend the 32 bit version, which tends to lead to less installation conflicts. 
-If you have a previous Python install, either delete it or in your "System Path" variable set this new Anaconda path at the top. 
-We will install in C:\Anaconda2 <br /> 
+**Recommended procedure.**   <br /> 
+1. Install a Python environment.  
+
+   We recommend [Anaconda CE](https://www.continuum.io/downloads), and have tested this installation procedure with Anaconda v4.2; other environments, such as Python XY, have worked as well. The 32 bit version lead to less installation hassle. Install in "C:\Anaconda2".  
+   If you have a previous Python install, either delete it or in your "System Path" variable set this new Anaconda path at the top. 
+   
 2. Install required packages, from a command prompt (terminal):   
 ```sh
         pip install pint 
