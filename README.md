@@ -5,10 +5,6 @@ Welcome to pyEPR!
 
 pyEPR is ... and is amazing because ...  (short blurb about pyEPR here). 
 
-$$
-\hat H_{\mathrm{full}} = \hat H_{\mathrm{lin}}  + \hat H_{\mathrm{nl}} 
-$$
-
 # Features
 ---------------------
 TBA   
@@ -21,11 +17,11 @@ If you are starting from scratch, follow the installation guide below to setup a
 **Recommended procedure.**   <br /> 
 
  1. Install a Python 2.7 environment.  
- * We recommend [Anaconda CE](https://www.continuum.io/downloads), and have tested this installation procedure with Anaconda v4.2 32-bit edition. Other environments, such as Python XY, and 64 bit work as well, but are not recommend. Install Anaconda in "C:\Anaconda2".
- * Set the Windows System PATH variable. In Control Panel, search for Environment Variables (in System), and open it. In the section System Variables, find the PATH environment variable and select it. Click Edit.  Place`C:\Anaconda2;C:\Anaconda2\Scripts;C:\Anaconda2\Library\bin;` at the beginning. If you have a previous Python installation this step is *very* important, especially to compile the qutip module. You may verity your path using the following command in the Command Prompt (terminal):
-    ``` sh
-    $ echo %PATH%
-    ```  
+   * We recommend [Anaconda CE](https://www.continuum.io/downloads), and have tested this installation procedure with Anaconda v4.2 32-bit edition. Other environments, such as Python XY, and 64 bit work as well, but are not recommend. Install Anaconda in "C:\Anaconda2".
+   * Set the Windows System PATH variable. In Control Panel, search for Environment Variables (in System), and open it. In the section System Variables, find the PATH environment variable and select it. Click Edit.  Place`C:\Anaconda2;C:\Anaconda2\Scripts;C:\Anaconda2\Library\bin;` at the beginning. If you have a previous Python installation this step is *very* important, especially to compile the qutip module. You may verity your path using the following command in the Command Prompt (terminal):
+      ``` sh
+      $ echo %PATH%
+      ```  
     
  2. Install required packages, form a terminal
  ```sh 
