@@ -1,31 +1,37 @@
-#%% @author: Zlatko
-import sys;  IMP_PATH = r'C:\\Users\\rslqulab\\Desktop\\zkm\\pyHFSS\\';
-if ~(IMP_PATH in sys.path): sys.path.insert(0,IMP_PATH);
-
-import pandas as pd, matplotlib.pyplot as plt, numpy as np;
-import hfss, bbq, bbqNumericalDiagonalization
+''' Updated 2017-02, created 2016
+    @author: Zlatko
+'''
+#%% 
+import bbq                           #hfss, bbqNumericalDiagonalization
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
 from hfss import CalcObject, ureg, load_HFSS_project
 from bbq  import eBBQ_Pmj_to_H_params, print_color, print_matrix
 
 
 if 1:    
-    proj_name    = r'DTW1_shantanu_12_17_2015' 
-    project_path = 'C:\\Users\\rslqulab\\Desktop\\Lysander\\participation_ratio_project\\2q_1w\\'
-    #proj_name    = r'pin_shift_sweep(circuit=-1500microns_perfect conductor)_5-2-16' 
-    #project_path = 'C:\\Users\\rslqulab\\Desktop\Lysander\\'
-    app, desktop, project = load_HFSS_project(proj_name, project_path)
-    design       = project.get_design("5- SMA Adapter SMA Pin 3Pad design Moved sapphire1") #project.get_active_design(10. SHANTANU FAB 1 [April13 2016])  #
+    ### Select design
+    project_path  = r'C:\Users\rslqulab\Desktop\zkm\2017_qm_jumps\\'
+    project_name  = r'2017-02  DT3  same as 3DT56 + extrachip'   
+    design_name   = r'11. DT2 Shyam Fab Measured LongT2 3DT56 + extra chip [2016-09]'
     
+    ### Junction parameters 
+    junc_rects    = ['juncV','juncH']           # Name of junction rectangles in HFSS
+    junc_lines    = ['juncV_line','juncH_line'] # Name of lines in HFSS used to define the current orientation for each junction
+    junc_LJ_names = ['LJ1','LJ2']
+    junc_lens     = [0.0001]*2                  # This is in meters!                                                  # this can soon be replaced by intgrating over junc_lines 
+    
+    ### Run - connect to HFSS
+    app, desktop, project = load_HFSS_project(project_name, project_path)
+    design        = project.get_design(design_name) if design_name != None else project.get_active_design()
+    
+    ### Run - do BBQ
     bbp = bbq.Bbq(project, design, append_analysis=False)
-
-if 1:
-    junc_rects    = ['qubit1','qubit2']#['juncV','juncH'] 
-    junc_lines    = ['line_qubit1','line_qubit2']#['juncV_line','juncH_line'] #
-    junc_LJ_names = ['LJ1', 'LJ2'];
-    junc_lens     = [0.0001]*2     #this is in meters!                                                  # this can soon be replaced by intgrating over junc_lines 
     bbp.do_eBBQ(junc_rect=junc_rects, junc_lines = junc_lines,  junc_len = junc_lens, junc_LJ_var_name = junc_LJ_names)
-    bba = bbp.bbq_analysis 
     
+    ### Collect results
+    bba           = bbp.bbq_analysis 
     sol           = bba.sols
     meta_datas    = bba.meta_data
     hfss_variables= bba.hfss_variables
@@ -35,6 +41,7 @@ if 1:
     reload(bbq)   # so that we can make changes to the class and reload quickly 
     from bbq  import BbqAnalysis
     bba = BbqAnalysis(bbp.data_filename)
+    print "Available variations: ", bba.variations
     
     cos_trunc = 10;   fock_trunc  = 7;
     CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz = \
@@ -57,7 +64,7 @@ if 1:
 #     Plot results for sweep
 #==============================================================================
 if 1:
-    swpvar='LJ'    
+    swpvar='LJ2'    
     use_1st_order = True  # use 1st O PT  to identify correct eigenvectors in ND
     RES = []; SWP = [];
     for key, s in sol.iteritems():     
