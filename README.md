@@ -9,7 +9,12 @@ If you have a python 2.7 enviornment setup, with qutip installed, fork the repos
 
 ##### Installation on windows from scratch.
 Recommended procedure.   
-1. Install [Anaconda CE](https://www.continuum.io/downloads) (Python XY would work too, but we will follow the CE install). This is your python environment.  64 bit or 32 bit should work---32 bit tends to lead to less installation conflicts. If there is a previous Python install, either delete it, or in your System Path variable set the Anaconda search path at the top. Install in C:\Anaconda2 <br /> 
+1. Install a Python Environment. 
+We recommend[Anaconda CE](https://www.continuum.io/downloads) and have tested the installation procedure with Anaconda v4.2. 
+We remark that other env., such as Python XY, have worked as well. 
+We recommend the 32 bit version, which tends to lead to less installation conflicts. 
+If you have a previous Python install, either delete it or in your "System Path" variable set this new Anaconda path at the top. 
+We will install in C:\Anaconda2 <br /> 
 2. Install required packages, from a command prompt (terminal):   
 ```sh
         pip install pint 
@@ -32,9 +37,9 @@ Next, install qutip, you can choose to use conda intall or pip install, or pull 
         conda install git
         pip install git+https://github.com/qutip/qutip.git
  ```
- 4. Use [SourceTree](https://www.sourcetreeapp.com/) or git to fork this repository.   
- 5. Add the repository folder to your python search path.    
- 6. Edit the config.py  to set the data saving directory correctly. :+1:     
+4. Fork the pyEPR repository. This may be done using the [SourceTree](https://www.sourcetreeapp.com/) GUI, or some other git manager.
+5. Add the pyEPR repository folder to your python search path.    
+6. Edit the config.py  to set the data saving directory correctly. :+1:     
   
  
 ##### Installation on Mac/Linux from scratch.   
