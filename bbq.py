@@ -79,13 +79,21 @@ class Bbq(object):
             if self.verbose: print 'This simulation has never been analyzed'
         
     def setup_data(self):
+        '''
+            Setups up the folder path 
+        '''
         data_dir = root_dir + '/' + self.project.name + '/' + self.design.name
         if self.verbose: print data_dir
         if not os.path.isdir(data_dir):
             os.makedirs(data_dir)
-        self.data_dir = data_dir
+        self.data_dir = data_dir                
         self.data_filename = self.data_dir + '/' + self.design.name + '_' + time.strftime('%Y%m%d_%H%M%S', time.localtime()) + '.hdf5'
-        if self.verbose: print "Data will be saved in " + str(data_dir)
+
+        if len(self.design.name) > 50:
+            print_color('WARNING!   DESING FILENAME MAY BE TOO LONG! ')        
+            
+        if self.verbose: 
+            print "Data will be saved in " + str(data_dir)
         
     @deprecated
     def calc_p_j(self, modes=None, variation=None):
