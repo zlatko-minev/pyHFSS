@@ -503,8 +503,9 @@ class Bbq(object):
     
 
 def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7, use_1st_order = False):
-    ''' numerical diagonalizaiton for energy BBQ
-        fzpfs: reduced zpf  ( in units of \phi_0
+    ''' 
+        numerical diagonalizaiton for energy BBQ
+        fzpfs: reduced zpf  ( in units of \phi_0 )
     '''    
     assert(all(freqs<1E6)), "Please input the frequencies in GHz"
     assert(all(LJs  <1E-3)),"Please input the inductances in Henries"
@@ -521,34 +522,52 @@ def eBBQ_ND(freqs, PJ, Om, EJ, LJs, SIGN, cos_trunc = 6, fock_trunc  = 7, use_1s
     
     Hs = bbq_hmt(freqs*10**9, LJs.astype(np.float), fqr*fzpfs, cos_trunc, fock_trunc, individual = use_1st_order)
     f1s, CHI_ND, fzpfs, f0s  = make_dispersive(Hs, fock_trunc, fzpfs, freqs,use_1st_order = use_1st_order)  # f0s = freqs
-    CHI_ND= -1*CHI_ND *1E-6;
+    CHI_ND = -1*CHI_ND *1E-6;
     return f1s, CHI_ND, fzpfs, f0s;
     
-def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _renorm_pj = True, use_1st_order = False):
+def eBBQ_Pmj_to_H_params(s, 
+                         meta_data, 
+                         cos_trunc     = None, 
+                         fock_trunc    = None, 
+                         _renorm_pj    = True, 
+                         use_1st_order = False):
     '''   
     returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
-        f1: qubit dressed freq
-        f0: qubit linear freq (eigenmode) 
-        and an overcomplete set of matrcieis
-        ask zkm for info.
+    ---------------
+        f0s [GHz]: Eigenmode frequencies computed by HFSS; i.e., linear freq returned in GHz
+        f1s [GHz]: Dressed mode frequencies (by the non-linearity; e.g., Lamb shift, etc. ). If numerical diagonalizaiton is run, then we return the numerically diagonalizaed frequencies, otherwise, use 1st order pertuirbation theory on the 4th order expansion of the cosine. 
+        
+        CHI_O1 [MHz] : Analytic expression for the chis based on a cos trunc to 4th order, and using 1st order perturbation theory. 
+        CHI_ND [MHz] : Numerically diagonalized chi matrix.
+        
+        PJ       : Participation matrix
+        Om [GHz] : Diagnoal matrix of of linear mode (HFSS) frequencies 
+        EJ [GHz] : Diagonal matrix of junction energies, in GHz. 
+        
+        ask Zlatko for more info.
     '''
-    import  scipy;    Planck  = scipy.constants.Planck
+    import  scipy
+    Planck     = scipy.constants.Planck
+    
     f0s        = np.array( s['freq'] )
     Qs         = s['modeQ']
-    LJ_nms     = meta_data['junc_LJ_var_name']# ordered
-    LJs        = np.array([meta_data['LJs'][nm] for nm in LJ_nms]) # LJ in Henries, must make sure these are given in the right order
+    LJ_nms     = meta_data['junc_LJ_var_name']                        # ordered
+    LJs        = np.array([meta_data['LJs'][nm] for nm in LJ_nms])    # LJ in Henries, must make sure these are given in the right order
     EJs        = (fluxQ**2/LJs/Planck*10**-9).astype(np.float)        # EJs in GHz
-    PJ_Jsu     = s.loc[:,s.keys().str.contains('pJ')]  # EPR from Jsurf avg
-    PJ_Jsu_sum = PJ_Jsu.apply(sum, axis = 1)           # sum of participations as calculated by avg surf current 
-    PJ_glb_sum = (s['U_E'] - s['U_H'])/(2*s['U_E'])    # sum of participations as calculated by global UH and UE  
-    diff       = (PJ_Jsu_sum-PJ_glb_sum)/PJ_glb_sum*100# debug
+    PJ_Jsu     = s.loc[:,s.keys().str.contains('pJ')]                 # EPR from Jsurf avg
+    PJ_Jsu_sum = PJ_Jsu.apply(sum, axis = 1)                          # sum of participations as calculated by avg surf current 
+    PJ_glb_sum = (s['U_E'] - s['U_H'])/(2*s['U_E'])                   # sum of participations as calculated by global UH and UE  
+    diff       = (PJ_Jsu_sum-PJ_glb_sum)/PJ_glb_sum*100               # debug
+    
     if _renorm_pj:  # Renormalize
         PJs = PJ_Jsu.divide(PJ_Jsu_sum, axis=0).mul(PJ_glb_sum,axis=0)
-    else: PJs = PJ_Jsu; print 'NO renorm'
+    else: 
+        PJs = PJ_Jsu
+        print 'NO renorm'
     
     if (PJs < 0).any().any() == True: 
         print "\n\n**************\n\n"
-        print_color("warning / error!!!  Some PJ was found <=0. This is prob numerical error.  taking the abs value.  Rerun with more precision. inspect. do due dilligence.)")
+        print_color("Warning / error!!!  Some PJ was found <= 0. This is probably a numerical error, or a super low-Q mode.  We will take the abs value.  Otherwise, rerun with more precision, inspect, and do due dilligence.)")
         print PJs
         print "\n\n**************\n\n"
         PJs = np.abs(PJs)
@@ -557,13 +576,15 @@ def eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = None, fock_trunc = None, _ren
     PJ    = np.mat(PJs.values)
     Om    = np.mat(np.diagflat(f0s)) 
     EJ    = np.mat(np.diagflat(EJs))
-    CHI_O1= Om * PJ * EJ.I * PJ.T * Om * 1000       # MHz
+    CHI_O1= Om * PJ * EJ.I * PJ.T * Om * 1000.      # MHz
     CHI_O1= divide_diagonal_by_2(CHI_O1)            # Make the diagonals alpha 
-    f1s   = f0s - np.diag(CHI_O1)                   # 1st order PT expect freq to be dressed down by alpha 
+    f1s   = f0s - np.diag(CHI_O1/1000.)             # 1st order PT expect freq to be dressed down by alpha 
+    
     if cos_trunc is not None:
         f1s, CHI_ND, fzpfs, f0s = eBBQ_ND(f0s, PJ, Om, EJ, LJs, SIGN, cos_trunc = cos_trunc, fock_trunc = fock_trunc, use_1st_order = use_1st_order)                
     else: 
         CHI_ND, fzpfs = None, None
+        
     return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs
     # the return could be made clener, or dictionary 
 
@@ -665,15 +686,39 @@ class BbqAnalysis(object):
     def get_junc_rect_names(self):
         return self.meta_data.loc['junc_rect',:]
         
-    def analyze_variation(self, variation = '0', print_results = True, 
-                          cos_trunc = 6,  fock_trunc  = 7,
-                          frmt = "{:7.2f}"):
+    def analyze_variation(self, 
+                          variation     = '0',
+                          cos_trunc     = 6,  
+                          fock_trunc    = 7,
+                          print_results = True, 
+                          frmt          = "{:7.2f}"   ):
+        '''
+        Container function to call eBBQ_Pmj_to_H_params
+        Can also print results neatly. 
+        
+        Returns 
+        ----------------------------
+        f0s [GHz]: Eigenmode frequencies computed by HFSS; i.e., linear freq returned in GHz
+        f1s [GHz]: Dressed mode frequencies (by the non-linearity; e.g., Lamb shift, etc. ). If numerical diagonalizaiton is run, then we return the numerically diagonalizaed frequencies, otherwise, use 1st order pertuirbation theory on the 4th order expansion of the cosine. 
+        
+        CHI_O1 [MHz] : Analytic expression for the chis based on a cos trunc to 4th order, and using 1st order perturbation theory. 
+        CHI_ND [MHz] : Numerically diagonalized chi matrix.
+        
+        PJ       : Participation matrix
+        Om [GHz] : Diagnoal matrix of of linear mode (HFSS) frequencies 
+        EJ [GHz] : Diagonal matrix of junction energies, in GHz. 
+        '''
+        
         s         = self.sols[variation];   
         meta_data = self.meta_data[variation]
         varz      = self.hfss_variables[variation]
         
         CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
-            eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc, _renorm_pj = self._renorm_pj)
+            eBBQ_Pmj_to_H_params(s, 
+                                 meta_data, 
+                                 cos_trunc = cos_trunc, 
+                                 fock_trunc = fock_trunc, 
+                                 _renorm_pj = self._renorm_pj)
         
         if print_results: ##TODO: generalize to more modes
             print '\nPJ=\t(renorm.)'  
@@ -696,6 +741,7 @@ class BbqAnalysis(object):
                 #print 
                 print "\n","* "*5, "Eigen (linear) Qs ", "* "*5
                 print pd.Series(Qs)  # Q =0 means no dissipation used in sim.
+                
         return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz
             
     @deprecated  
