@@ -72,6 +72,11 @@ You may find an advised workflow and some setup tips here.
 
 ## Troubleshooting
 ---------------------
+###### First run: pint error: system='mks' unkown.
+Please update to pint version newer than 0.7.2. You may use 
+```
+    pip install pint --upgrade
+```
 
 ###### COM Error on opening HFSS 
 Check the project and design file names carefully. Make sure that the file-path doesn't have apostrophes or other bad characters, such as in C:\\Minev's PC\\my:Project.  Check that HFSS hasn't popped up an error dialogue, such as "File locked." Manually open HFSS and the file.    
@@ -81,3 +86,5 @@ Either HFSS popped an error dialogue, froze up, or you miss-typed the name of so
 
 ###### HFSS refuses to close
 If your script terminates improperly, this can happen. pyHFSS tries to catch termination events and handle them. Your safety should be guaranteed however, if you call `hfss.release()` when you have finished. Use the Task-manager (Activity Monitor on MAC) to kill HFSS if you want.   
+                                                                                                                                                                                    
+                                                                                                                                                                                    
