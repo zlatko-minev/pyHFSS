@@ -28,6 +28,20 @@ def fact(n):
 def nck(n, k):
     return fact(n)/(fact(k)*fact(n-k))
 
+def isint(value):
+  try:
+    int(value)
+    return True
+  except ValueError:
+    return False
+
+def isfloat(value):
+  try:
+    float(value)
+    return True
+  except ValueError:
+    return False
+
 def deprecated(func):
     """This is a decorator which can be used to mark functions
     as deprecated. It will result in a warning being emmitted

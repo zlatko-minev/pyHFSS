@@ -1,4 +1,4 @@
-from __future__ import division, print_function    # Python 2.7 and 3 compatibility  
+from __future__ import division, print_function    # Python 2.7 and 3 compatibility
 import atexit
 from copy import copy
 import os
@@ -10,7 +10,7 @@ import signal
 import pythoncom
 import time
 from sympy.parsing import sympy_parser
-from pint import UnitRegistry # units 
+from pint import UnitRegistry # units
 from win32com.client import Dispatch, CDispatch
 
 ureg = UnitRegistry()
@@ -37,7 +37,7 @@ def increment_name(base, existing):
     while make_name() in existing:
         n += 1
     return make_name()
-    
+
 def extract_value_unit(expr, units):
     """
     :type expr: str
@@ -155,7 +155,7 @@ class HfssApp(COMWrapper):
         super(HfssApp, self).__init__()
         self._app = Dispatch('AnsoftHfss.HfssScriptInterface')
         # in v2016 the main object is 'Ansoft.ElectronicsDesktop'
-            
+
     def get_app_desktop(self):
         return HfssDesktop(self, self._app.GetAppDesktop())
         # in v2016, there is also getApp - which can be called with HFSS
@@ -254,7 +254,7 @@ class HfssProject(COMWrapper):
 
     def import_dataset(self, path):
         self._project.ImportDataset(path)
-        
+
     def rename_design(self, design, rename):
         if design in self.get_designs():
             design.rename_design(design.name, rename)
@@ -267,7 +267,7 @@ class HfssProject(COMWrapper):
 
     def get_variable_names(self):
         return [VariableString(s) for s in self._project.GetVariables()]
-    
+
     def get_variables(self):
         return {VariableString(s): self.get_variable_value(s) for s in self._project.GetVariables()}
 
@@ -313,7 +313,7 @@ class HfssProject(COMWrapper):
 
     def new_em_design(self, name):
         return self.new_design(name, "Eigenmode")
-        
+
     @property  # v2016
     def name(self):
         return self._project.GetName()
@@ -341,7 +341,7 @@ class HfssDesign(COMWrapper):
     def rename_design(self, name):
         old_name = self._design.GetName()
         self._design.RenameDesignInstance(old_name, name)
-		
+
     def copy_to_project(self, project):
         project.make_active()
         project._project.CopyDesign(self.name)
@@ -352,7 +352,7 @@ class HfssDesign(COMWrapper):
         dup = self.copy_to_project(self.parent)
         if name is not None:
             dup.rename_design(name)
-        return dup 
+        return dup
 
     def get_setup_names(self):
         return self._setup_module.GetSetups()
@@ -377,7 +377,7 @@ class HfssDesign(COMWrapper):
     def create_dm_setup(self, freq_ghz=1, name="Setup", max_delta_s=0.1, max_passes=10,
                         min_passes=1, min_converged=1, pct_refinement=30,
                         basis_order=-1):
-                            
+
         name = increment_name(name, self.get_setup_names())
         self._setup_module.InsertSetup(
             "HfssDriven", [
@@ -396,7 +396,7 @@ class HfssDesign(COMWrapper):
     def create_em_setup(self, name="Setup", min_freq_ghz=1, n_modes=1, max_delta_f=0.1, max_passes=10,
                         min_passes=1, min_converged=1, pct_refinement=30,
                         basis_order=-1):
-                            
+
         name = increment_name(name, self.get_setup_names())
         self._setup_module.InsertSetup(
             "HfssEigen", [
@@ -413,10 +413,10 @@ class HfssDesign(COMWrapper):
                 "BasisOrder:=", basis_order
             ])
         return HfssEMSetup(self, name)
-    
+
     def delete_setup(self, name):
         if name in self.get_setup_names():
-            self._setup_module.DeleteSetups(name)      
+            self._setup_module.DeleteSetups(name)
 
     def get_nominal_variation(self):
         return self._design.GetNominalVariation()
@@ -426,7 +426,7 @@ class HfssDesign(COMWrapper):
             variableprop = "PostProcessingVariableProp"
         else:
             variableprop = "VariableProp"
-            
+
         self._design.ChangeProperty(
             ["NAME:AllTabs",
              ["NAME:LocalVariableTab",
@@ -447,21 +447,21 @@ class HfssDesign(COMWrapper):
 
     def get_variable_value(self, name):
         return self._design.GetVariableValue(name)
-        
+
     def get_variable_names(self):
-        return [VariableString(s) for s in self._design.GetVariables()+self._design.GetPostProcessingVariables()]        
-        
+        return [VariableString(s) for s in self._design.GetVariables()+self._design.GetPostProcessingVariables()]
+
     def get_variables(self):
         local_variables = self._design.GetVariables()+self._design.GetPostProcessingVariables()
         return {lv : self.get_variable_value(lv) for lv in local_variables}
- 
-    def copy_design_variables(self, source_design):        
+
+    def copy_design_variables(self, source_design):
         ''' does not check that variables are all present '''
-        
+
         # don't care about values
         source_variables = source_design.get_variables()
-        
-        for name, value in source_variables.iteritems():
+
+        for name, value in source_variables.items():
             self.set_variable(name, value)
 
     def get_excitations(self):
@@ -486,7 +486,7 @@ class HfssDesign(COMWrapper):
 
     def Clear_Field_Clac_Stack(self):
         self._fields_calc.CalcStack("Clear")
-    
+
 class HfssSetup(HfssPropertyObject):
     prop_tab = "HfssTab"
     passes = make_int_prop("Passes")
@@ -513,7 +513,7 @@ class HfssSetup(HfssPropertyObject):
         if name is None:
             name = self.name
         self.parent._design.Analyze(name)
-        
+
     def insert_sweep(self, start_ghz, stop_ghz, count=None, step_ghz=None,
                      name="Sweep", type="Fast", save_fields=False):
         if (count is None) == (step_ghz is None):
@@ -541,7 +541,7 @@ class HfssSetup(HfssPropertyObject):
 
         self._setup_module.InsertFrequencySweep(self.name, params)
         return HfssFrequencySweep(self, name)
-    
+
     def delete_sweep(self, name):
         self._setup_module.DeleteSweep(self.name, name)
 
@@ -580,7 +580,7 @@ class HfssSetup(HfssPropertyObject):
         elif name not in sweeps:
             raise EnvironmentError("Sweep {} not found in {}".format(name, sweeps))
         return HfssFrequencySweep(self, name)
-		
+
     def add_fields_convergence_expr(self, expr, pct_delta, phase=0):
         """note: because of hfss idiocy, you must call "commit_convergence_exprs" after adding all exprs"""
         assert isinstance(expr, NamedCalcObject)
@@ -603,16 +603,16 @@ class HfssSetup(HfssPropertyObject):
             ["NAME:ExpressionCache", self.expression_cache_items]
         ]
         self._setup_module.EditSetup(self.name, args)
-		
+
     def get_convergence(self, variation=""):
-        '''  variation should be in the form 
+        '''  variation should be in the form
              variation = "scale_factor='1.2001'" ...
         '''
 #        fn = tempfile.mktemp()
         temp = tempfile.NamedTemporaryFile(); temp.close()
         #print(temp.name)
         self.parent._design.ExportConvergence(self.name, variation, temp.name+ '.conv', False)
-        import pandas as pd 
+        import pandas as pd
         try:  # crashed if not data
             df = pd.read_csv(temp.name + '.conv', delimiter = '|',skipinitialspace = True , skiprows = 16, skip_footer=0, skip_blank_lines=True, engine='python')
             df = df.drop('Unnamed: 3',1)
@@ -627,13 +627,13 @@ class HfssSetup(HfssPropertyObject):
         return df
 
     def get_mesh_stats(self, variation=""):
-        '''  variation should be in the form 
+        '''  variation should be in the form
              variation = "scale_factor='1.2001'" ...
         '''
         temp = tempfile.NamedTemporaryFile(); temp.close()
         #print(temp.name0
-        self.parent._design.ExportMeshStats(self.name, variation, temp.name+ '.mesh', True)  # seems broken in 2016 because of extra text added to the top of the file 
-        import pandas as pd 
+        self.parent._design.ExportMeshStats(self.name, variation, temp.name+ '.mesh', True)  # seems broken in 2016 because of extra text added to the top of the file
+        import pandas as pd
         try:
             df = pd.read_csv(temp.name+'.mesh', delimiter = '|',skipinitialspace = True , skiprows = 7, skip_footer=1, skip_blank_lines=True, engine='python')
             df = df.drop('Unnamed: 9',1)
@@ -642,7 +642,7 @@ class HfssSetup(HfssPropertyObject):
             print(e)
             print('ERROR!  Error in trying to read temporary MESH file ' + temp.name +'\n. Check to see if there is a mesh available for this current variation. If the nominal design is not solved, it will not have a mesh., but will show up as a variation.')
             df = None
-        return df 
+        return df
 
     def get_profile(self, variation=""):
         fn = tempfile.mktemp()
@@ -668,7 +668,7 @@ class HfssDMSetup(HfssSetup):
                 "Soln:=", linked_setup.solution_name,
                 self._map_variables_by_name(),
                 "ForceSourceToSolve:=", True,
-                "PathRelativeTo:=", "TargetProject",                
+                "PathRelativeTo:=", "TargetProject",
                 ],
                 ]
         self._setup_module.EditSetup(self.name, args)
@@ -678,7 +678,7 @@ class HfssDMSetup(HfssSetup):
         # don't care about values
         project_variables = self.parent.parent.get_variable_names()
         design_variables = self.parent.get_variable_names()
-    
+
         # build array
         args = ["NAME:Params",]
         for name in project_variables:
@@ -712,10 +712,10 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
         fn = tempfile.mktemp()
         self._solutions.ExportEigenmodes(self.parent.solution_name, lv, fn)
         data = numpy.genfromtxt(fn, dtype='str')
-        # Update to Py 3: 
+        # Update to Py 3:
         # np.loadtxt and np.genfromtxt operate in byte mode, which is the default string type in Python 2.
         # But Python 3 uses unicode, and marks bytestrings with this b.
-        if numpy.size(numpy.shape(data)) == 1: # getting around the very annoying fact that 
+        if numpy.size(numpy.shape(data)) == 1: # getting around the very annoying fact that
             data = numpy.array([data])         # in Python a 1D array does not have shape (N,1)
         else:                                  # but rather (N,) ....
             pass
@@ -724,8 +724,8 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
                                                     # so kappa/2pi = 2*Im(eigvalue)
         else:
             kappa_over_2pis = None
-            
-        print(data[:,1])
+
+        #print(data[:,1])
         freqs = [float(ii) for ii in data[:,1]]
         return freqs, kappa_over_2pis
 
@@ -750,7 +750,7 @@ class HfssFrequencySweep(COMWrapper):
     step_size = make_float_prop("Step Size")
     count = make_float_prop("Count")
     sweep_type = make_str_prop("Type")
-    
+
     def __init__(self, setup, name):
         """
         :type setup: HfssSetup
@@ -765,7 +765,7 @@ class HfssFrequencySweep(COMWrapper):
 
     def analyze_sweep(self):
         self.parent.analyze(self.solution_name)
-        
+
     def get_network_data(self, formats):
         if isinstance(formats, str):
             formats = formats.split(",")
@@ -1115,7 +1115,7 @@ class CalcObject(COMWrapper):
         self.stack = stack
         self.setup = setup
         self.calc_module = setup.parent._fields_calc
-        
+
     def _bin_op(self, other, op):
         if isinstance(other, (int, float)):
             other = ConstantCalcObject(other, self.setup)
@@ -1156,7 +1156,7 @@ class CalcObject(COMWrapper):
 
     def __pow__(self, other):
         return self._bin_op(other, "Pow")
-        
+
     def dot(self, other):
         return self._bin_op(other,"Dot")
 
@@ -1165,13 +1165,13 @@ class CalcObject(COMWrapper):
 
     def __abs__(self):
         return self._unary_op("Abs")
-        
+
     def __mag__(self):
         return self._unary_op("Mag")
-    
+
     def mag(self):
         return self._unary_op("Mag")
-        
+
     def conj(self):
         return self._unary_op("Conj") # make this right
 
@@ -1186,7 +1186,7 @@ class CalcObject(COMWrapper):
 
     def norm_2(self):
 
-        return (self.__mag__()).__pow__(2)        
+        return (self.__mag__()).__pow__(2)
         #return self._unary_op("ScalarX")**2+self._unary_op("ScalarY")**2+self._unary_op("ScalarZ")**2
 
     def real(self):
@@ -1198,15 +1198,15 @@ class CalcObject(COMWrapper):
     def _integrate(self, name, type):
         stack = self.stack + [(type, name), ("CalcOp", "Integrate")]
         return CalcObject(stack, self.setup)
-      
+
     def getQty(self, name):
         stack = self.stack + [("EnterQty", name)]
         return CalcObject(stack, self.setup)
 
     def integrate_line(self, name):
         return self._integrate(name, "EnterLine")
-        
-    def integrate_line_tangent(self, name): 
+
+    def integrate_line_tangent(self, name):
         ''' integrate line tangent to vector expression \n
             name = of line to integrate over '''
         self.stack = self.stack + [("EnterLine", name),
@@ -1219,7 +1219,7 @@ class CalcObject(COMWrapper):
 
     def integrate_vol(self, name="AllObjects"):
         return self._integrate(name, "EnterVol")
-        
+
     def times_eps(self):
         stack = self.stack + [("ClcMaterial", ("Permittivity (epsi)", "mult"))]
         return CalcObject(stack, self.setup)
@@ -1250,15 +1250,15 @@ class CalcObject(COMWrapper):
             print('-----------------')
         #self.calc_module.set_mode(n_mode, 0)
         setup_name = self.setup.solution_name
-        
+
         if lv is not None:
            args = lv
         else:
            args = []
-           
+
         args.append("Phase:=")
         args.append(str(int(phase)) + "deg")
-        
+
         if isinstance(self.setup, HfssDMSetup):
             args.extend(["Freq:=", self.setup.solution_freq])
 
@@ -1288,7 +1288,7 @@ def get_active_project():
         is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
     if not is_admin:
         print('\033[93m WARNING: you are not runnning as an admin! You need to run as an admin. You will probably get an error next. \033[0m')
-    
+
     app = HfssApp()
     desktop = app.get_app_desktop()
     return desktop.get_active_project()
@@ -1301,38 +1301,38 @@ def get_report_arrays(name):
     d = get_active_design()
     r = HfssReport(d, name)
     return r.get_arrays()
-    
-def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  # aedt is for 2016 version 
-    ''' proj_name == None => get active. 
-        (make sure 2 run as admin) 
+
+def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  # aedt is for 2016 version
+    ''' proj_name == None => get active.
+        (make sure 2 run as admin)
     '''
-    
+
     # Checks
-    assert os.path.isdir(project_path),   "ERROR! project_path is not a valid directory. Check the path, and especially \\ charecters."  
-    
+    assert os.path.isdir(project_path),   "ERROR! project_path is not a valid directory. Check the path, and especially \\ charecters."
+
     project_path +=  proj_name + extension
-    
+
     if os.path.isfile(project_path):
         print('  Success: File path to HFSS project found.')
     else:
         raise Exception("ERROR! Valid directory, but invalid project filename. Not found! Please check your filename.\n%s\n" % project_path )
-    
+
     if os.path.isfile(project_path+'.lock'):
         print('   Warning: File is locked. Open may fail. Delete .lock.'    )
-        
+
     app     = HfssApp()
     print("   Success: Opened HfssApp.")
     desktop = app.get_app_desktop()
     print( "   Success: Opened Hfss desktop.")
     if proj_name is not None:
         if proj_name in desktop.get_project_names():
-            desktop.set_active_project(proj_name)    
+            desktop.set_active_project(proj_name)
             project = desktop.get_active_project()
         else:
-            project = desktop.open_project(project_path) 
-    else: 
+            project = desktop.open_project(project_path)
+    else:
         project = desktop.get_active_project()
     print("   Success: Opened link to HFSS user project.")
     return app, desktop, project
-    
+
 
