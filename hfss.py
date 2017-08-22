@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function    # Python 2.7 and 3 compatibility  
 import atexit
 from copy import copy
 import os
@@ -26,7 +26,7 @@ def simplify_arith_expr(expr):
         out = repr(sympy_parser.parse_expr(str(expr)))
         return out
     except:
-        print "Couldn't parse", expr
+        print("Couldn't parse", expr)
         raise
 
 def increment_name(base, existing):
@@ -96,8 +96,8 @@ def release():
     time.sleep(0.1)
     refcount = pythoncom._GetInterfaceCount()
     if refcount > 0:
-        print "Warning! %d COM references still alive" % (refcount)
-        print "HFSS will likely refuse to shut down"
+        print( "Warning! %d COM references still alive" % (refcount))
+        print("HFSS will likely refuse to shut down")
 
 class COMWrapper(object):
     def __init__(self):
@@ -610,7 +610,7 @@ class HfssSetup(HfssPropertyObject):
         '''
 #        fn = tempfile.mktemp()
         temp = tempfile.NamedTemporaryFile(); temp.close()
-        print temp.name
+        #print(temp.name)
         self.parent._design.ExportConvergence(self.name, variation, temp.name+ '.conv', False)
         import pandas as pd 
         try:  # crashed if not data
@@ -619,11 +619,11 @@ class HfssSetup(HfssPropertyObject):
             df.index = df['Pass Number']
             df = df.drop('Pass Number',1)
         except Exception as e:
-            print "ERROR in CONV reading operation."
-            print e
-            print 'ERROR!  Error in trying to read temporary CONV file ' + temp.name +'\n. Check to see if there is a CONV available for this current variation. If the nominal design is not solved, it will not have a CONV., but will show up as a variation.'
+            print("ERROR in CONV reading operation.")
+            print(e)
+            print('ERROR!  Error in trying to read temporary CONV file ' + temp.name +'\n. Check to see if there is a CONV available for this current variation. If the nominal design is not solved, it will not have a CONV., but will show up as a variation.')
             df = None
-        print df
+        print(df)
         return df
 
     def get_mesh_stats(self, variation=""):
@@ -631,16 +631,16 @@ class HfssSetup(HfssPropertyObject):
              variation = "scale_factor='1.2001'" ...
         '''
         temp = tempfile.NamedTemporaryFile(); temp.close()
-        #print temp.name
+        #print(temp.name0
         self.parent._design.ExportMeshStats(self.name, variation, temp.name+ '.mesh', True)  # seems broken in 2016 because of extra text added to the top of the file 
         import pandas as pd 
         try:
             df = pd.read_csv(temp.name+'.mesh', delimiter = '|',skipinitialspace = True , skiprows = 7, skip_footer=1, skip_blank_lines=True, engine='python')
             df = df.drop('Unnamed: 9',1)
         except Exception as e:
-            print "ERROR in MESH reading operation."
-            print e
-            print 'ERROR!  Error in trying to read temporary MESH file ' + temp.name +'\n. Check to see if there is a mesh available for this current variation. If the nominal design is not solved, it will not have a mesh., but will show up as a variation.'
+            print("ERROR in MESH reading operation.")
+            print(e)
+            print('ERROR!  Error in trying to read temporary MESH file ' + temp.name +'\n. Check to see if there is a mesh available for this current variation. If the nominal design is not solved, it will not have a mesh., but will show up as a variation.')
             df = None
         return df 
 
@@ -711,7 +711,10 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
     def eigenmodes(self, lv=""):
         fn = tempfile.mktemp()
         self._solutions.ExportEigenmodes(self.parent.solution_name, lv, fn)
-        data = numpy.loadtxt(fn, dtype='str')
+        data = numpy.genfromtxt(fn, dtype='str')
+        # Update to Py 3: 
+        # np.loadtxt and np.genfromtxt operate in byte mode, which is the default string type in Python 2.
+        # But Python 3 uses unicode, and marks bytestrings with this b.
         if numpy.size(numpy.shape(data)) == 1: # getting around the very annoying fact that 
             data = numpy.array([data])         # in Python a 1D array does not have shape (N,1)
         else:                                  # but rather (N,) ....
@@ -722,6 +725,7 @@ class HfssEMDesignSolutions(HfssDesignSolutions):
         else:
             kappa_over_2pis = None
             
+        print(data[:,1])
         freqs = [float(ii) for ii in data[:,1]]
         return freqs, kappa_over_2pis
 
@@ -787,6 +791,7 @@ class HfssFrequencySweep(COMWrapper):
                     f.readline()
                     colnames = f.readline().split()
                 array = numpy.loadtxt(fn, skiprows=2)
+                # WARNING for python 3 probably need to use genfromtxt
                 if freq is None:
                     freq = array[:, 0]
                 for i, j in list:
@@ -831,6 +836,7 @@ class HfssReport(COMWrapper):
         fn = tempfile.mktemp(suffix=".csv")
         self.export_to_file(fn)
         return numpy.loadtxt(fn, skiprows=1, delimiter=',').transpose()
+        # warning for python 3 probably need to use genfromtxt
 
 
 class HfssModeler(COMWrapper):
@@ -1239,9 +1245,9 @@ class CalcObject(COMWrapper):
     def evaluate(self, phase=0, lv=None, print_debug = False):#, n_mode=1):
         self.write_stack()
         if print_debug:
-            print '---------------------'
-            print 'writing to stack: OK'
-            print '-----------------'
+            print( '---------------------')
+            print( 'writing to stack: OK')
+            print('-----------------')
         #self.calc_module.set_mode(n_mode, 0)
         setup_name = self.setup.solution_name
         
@@ -1281,7 +1287,7 @@ def get_active_project():
     except AttributeError:
         is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
     if not is_admin:
-        print '\033[93m WARNING: you are not runnning as an admin! You need to run as an admin. You will probably get an error next. \033[0m'
+        print('\033[93m WARNING: you are not runnning as an admin! You need to run as an admin. You will probably get an error next. \033[0m')
     
     app = HfssApp()
     desktop = app.get_app_desktop()
@@ -1307,17 +1313,17 @@ def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  # aedt is 
     project_path +=  proj_name + extension
     
     if os.path.isfile(project_path):
-        print '  Success: File path to HFSS project found.'
+        print('  Success: File path to HFSS project found.')
     else:
         raise Exception("ERROR! Valid directory, but invalid project filename. Not found! Please check your filename.\n%s\n" % project_path )
     
     if os.path.isfile(project_path+'.lock'):
-        print '   Warning: File is locked. Open may fail. Delete .lock.'    
+        print('   Warning: File is locked. Open may fail. Delete .lock.'    )
         
     app     = HfssApp()
-    print "   Success: Opened HfssApp."
+    print("   Success: Opened HfssApp.")
     desktop = app.get_app_desktop()
-    print "   Success: Opened Hfss desktop."
+    print( "   Success: Opened Hfss desktop.")
     if proj_name is not None:
         if proj_name in desktop.get_project_names():
             desktop.set_active_project(proj_name)    
@@ -1326,7 +1332,7 @@ def load_HFSS_project(proj_name, project_path, extension = '.aedt'):  # aedt is 
             project = desktop.open_project(project_path) 
     else: 
         project = desktop.get_active_project()
-    print "   Success: Opened link to HFSS user project."
+    print("   Success: Opened link to HFSS user project.")
     return app, desktop, project
     
 
