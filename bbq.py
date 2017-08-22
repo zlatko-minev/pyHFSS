@@ -11,17 +11,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Standard imports
-from stat       import S_ISREG, ST_CTIME, ST_MODE
-from pandas     import HDFStore, Series, DataFrame
-from pint       import UnitRegistry
+from stat        import S_ISREG, ST_CTIME, ST_MODE
+from pandas      import HDFStore, Series, DataFrame
+from pint        import UnitRegistry
+from collections import OrderedDict
 
-# pyEPR imports
-#from hfss       import *
-#from toolbox    import *
-from hfss       import CalcObject, load_HFSS_project
-from toolbox    import print_NoNewLine, print_color, deprecated, pi, fact, epsilon_0, hbar, fluxQ, nck, \
-                       divide_diagonal_by_2, print_matrix
-from config_bbq import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
+# pyEPR custom imports
+from hfss        import CalcObject, load_HFSS_project
+from toolbox     import print_NoNewLine, print_color, deprecated, pi, fact, epsilon_0, hbar, fluxQ, nck, \
+                        divide_diagonal_by_2, print_matrix, DataFrame_col_diff, isint
+from config_bbq  import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
 
 ### Definitions
 ureg  = UnitRegistry(system='mks')
@@ -57,9 +56,9 @@ class Bbq(object):
         self.solutions        = self.setup.get_solutions()
         self.verbose          = verbose
         self.append_analysis  = append_analysis
-        self.hfss_variables   = {}                             # container for eBBQ list of varibles
-        self.sols             = {}                             # container for eBBQ solutions; could make a Panel
-        self.meta_data        = {}                             # container for eBBQ metadata
+        self.hfss_variables   = OrderedDict()                             # container for eBBQ list of varibles
+        self.sols             = OrderedDict()                             # container for eBBQ solutions; could make a Panel
+        self.meta_data        = OrderedDict()                             # container for eBBQ metadata
 
         self.setup_data()
         if self.verbose:
@@ -126,7 +125,7 @@ class Bbq(object):
         if modes is None:
             modes = range(self.nmodes)
 
-        pjs = {}
+        pjs = OrderedDict()
         for ii, m in enumerate(modes):
             print('Calculating p_j for mode ' + str(m) + ' (' + str(ii) + '/' + str(np.size(modes)-1) + ')')
             self.solutions.set_mode(m+1, 0)
@@ -139,7 +138,7 @@ class Bbq(object):
         return pjs
 
     def get_p_j(self, mode):
-        pj = {}
+        pj = OrderedDict()
         pj_val = (self.U_E-self.U_H)/(2*self.U_E)
         pj['pj_'+str(mode)] = np.abs(pj_val)
         print('    p_j_' + str(mode) + ' = ' + str(pj_val))
@@ -148,7 +147,7 @@ class Bbq(object):
     def get_freqs_bare(self, variation):
         #str(self.get_lv(variation))
         freqs_bare_vals = []
-        freqs_bare_dict = {}
+        freqs_bare_dict = OrderedDict()
         freqs, kappa_over_2pis = self.solutions.eigenmodes(self.get_lv_EM(variation))
         for m in range(self.nmodes):
             freqs_bare_dict['freq_bare_'+str(m)] = 1e9*freqs[m]
@@ -200,7 +199,7 @@ class Bbq(object):
 
     def get_variables(self,variation=None):
         lv = self.get_lv(variation)
-        variables={}
+        variables=OrderedDict()
         for ii in range(int(len(lv)/2)):
             variables['_'+lv[2*ii][:-2]]=lv[2*ii+1]
         self.variables = variables
@@ -219,7 +218,7 @@ class Bbq(object):
         ref: http://arxiv.org/pdf/1509.01119.pdf
         '''
         lv = self.get_lv(variation)
-        Qseam = {}
+        Qseam = OrderedDict()
         print('Calculating Qseam_'+ seam +' for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')')
         j_2_norm = self.fields.Vector_Jsurf.norm_2() # overestimating the loss by taking norm2 of j, rather than jperp**2
         int_j_2 = j_2_norm.integrate_line(seam)
@@ -263,7 +262,7 @@ class Bbq(object):
         return Qseamsweep
 
     def get_Qdielectric(self, dielectric, mode, variation):
-        Qdielectric = {}
+        Qdielectric = OrderedDict()
         print('Calculating Qdielectric_'+ dielectric +' for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')')
 
         U_dielectric = self.calc_U_E(variation, volume=dielectric)
@@ -279,7 +278,7 @@ class Bbq(object):
         ref: http://arxiv.org/pdf/1509.01854.pdf
         '''
         lv = self.get_lv(variation)
-        Qsurf = {}
+        Qsurf = OrderedDict()
         print('Calculating Qsurface for mode ' + str(mode) + ' (' + str(mode) + '/' + str(self.nmodes-1) + ')')
 #        A = self.fields.Mag_E**2
 #        A = A.integrate_vol(name='AllObjects')
@@ -299,7 +298,7 @@ class Bbq(object):
         return Series(Qsurf)
 
     def get_Hparams(self, freqs, pjs, lj):
-        Hparams = {}
+        Hparams = OrderedDict()
         fzpfs = []
 
         # calculate Kerr and fzpf
@@ -393,7 +392,7 @@ class Bbq(object):
             Potential errors:  If you dont have a line or rect by the right name you will prob get an erorr o the type:
                 com_error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024365), None)
         '''
-        dat = {}
+        dat = OrderedDict()
         for i, junc_rect in enumerate(junc_rects):
             print_NoNewLine('     ' + junc_rect)
             if method is 'J_surf_mag':
@@ -449,12 +448,12 @@ class Bbq(object):
         """
 
         self.Pj_from_current = Pj_from_current
-        meta_data = {}
+        meta_data = OrderedDict()
         assert(type(junc_LJ_var_name) == list), "Please pass junc_LJ_var_name as a list "
 
         if Pj_from_current        :
             print_color(' Setup: ' + self.setup.name)
-            self.PJ_multi_sol   = {} # this is where the result will go
+            self.PJ_multi_sol   = OrderedDict() # this is where the result will go
         if seams       is not None:
             self.seams          = seams
             meta_data['seams']  = seams
@@ -483,19 +482,22 @@ class Bbq(object):
         ###  Main loop - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         for ii, variation in enumerate(variations):
 
-            print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1), bg = 44, newline = False )
+            # Get variation, see if analyzed previously
+            print_color('variation : ' + variation + ' / ' + str(self.nvariations-1), bg = 44, newline = False)
             self.lv = self.get_lv(variation)
-
-            if (variation+'/hfss_variables') in hdf.keys() and self.append_analysis: print_NoNewLine('  previously analyzed ...\n');  \
+            if (variation+'/hfss_variables') in hdf.keys() and self.append_analysis:
+                print_NoNewLine('  previously analyzed ...\n')
                 continue
 
             print_NoNewLine( ' NOT analyzed\n' )
-            time.sleep(0.5)
-            hdf[variation+'/hfss_variables'] = self.hfss_variables[variation] = varz \
+            time.sleep(0.2)
+            # TODO: this following naming convention might be bad for the hdf5 file
+            hdf[variation+'/hfss_variables'] = self.hfss_variables[variation] \
+                                             = varz \
                                              = pd.Series(self.get_variables(variation=variation))
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)   # get bare freqs from HFSS
 
-            self.pjs      = {}
+            self.pjs      = OrderedDict()
             var_sol_accum = []
             for mode in modes:
                 sol = Series({'freq' : freqs_bare_vals[mode]*10**-9, 'modeQ' : freqs_bare_dict['Q_'+str(mode)] })
@@ -591,8 +593,17 @@ def eBBQ_Pmj_to_H_params(s,
                          _renorm_pj    = True,
                          use_1st_order = False):
     '''
-    returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
+    Parameters:
     ---------------
+        fock_trunc    : None.   If not None, used for numerical diagonalizaiton of the Hamiltonian
+        fock_trunc    : None.   If not None, used for numerical diagonalizaiton of the Hamiltonian
+        _renorm_pj    : True.   If True, Use the difference in W_E and W_H to converge faster on the multi-junction pmjs
+        use_1st_order : False.  If True use 1st O PT  to identify correct eigenvectors in ND
+
+    Returns:
+    ---------------
+    Returns the CHIs as MHz with anharmonicity alpha as the diagonal  (with - sign)
+
         f0s [GHz]: Eigenmode frequencies computed by HFSS; i.e., linear freq returned in GHz
         f1s [GHz]: Dressed mode frequencies (by the non-linearity; e.g., Lamb shift, etc. ). If numerical diagonalizaiton is run, then we return the numerically diagonalizaed frequencies, otherwise, use 1st order pertuirbation theory on the 4th order expansion of the cosine.
 
@@ -654,7 +665,8 @@ class BbqAnalysis(object):
     This data is obtained using e.g bbq.do_bbq
 
     '''
-    def __init__(self, data_filename, variations=None):
+    def __init__(self, data_filename, variations=None, do_print_info = True):
+
         #raise('not implemented')
         self.data_filename = data_filename
         with HDFStore(data_filename, mode = 'r') as hdf:  # = h5py.File(data_filename, 'r')
@@ -668,11 +680,11 @@ class BbqAnalysis(object):
                         variations += re.findall(r'\b\d+\b', key)
 
             self.variations     = variations
-            self.hfss_variables = {}
-            self.sols           = {}
-            self.meta_data      = {}
-            self.mesh_stats     = {}
-            self.convergence    = {}
+            self.hfss_variables = OrderedDict()
+            self.sols           = OrderedDict()
+            self.meta_data      = OrderedDict()
+            self.mesh_stats     = OrderedDict()
+            self.convergence    = OrderedDict()
             for variation in variations:
                 try:
                     self.hfss_variables[variation] = hdf[variation+'/hfss_variables']
@@ -688,23 +700,38 @@ class BbqAnalysis(object):
             self.meta_data      = DataFrame(self.meta_data)
             self._renorm_pj     = True
 
+        ### Format to nice pandas
+        self.hfss_variables = pd.DataFrame(self.hfss_variables)
+        col_names           = self.hfss_variables.columns
+        if np.all(col_names.map(isint)):
+            self.hfss_variables = self.hfss_variables[col_names.astype(int).sort_values().astype(str)] # sort by numerical order
+
+        if do_print_info:
+            self.print_info()
+
+    def print_info(self):
+            print_color('. '*40, bg = 42, style = 2)
+            print("\t Differences in variations:" )
+            print(self.hfss_variables[DataFrame_col_diff(self.hfss_variables)])
+            print('\n')
+
     def get_variable_vs(self, swpvar):
-        ret = {}
-        for key, varz in self.hfss_variables.iteritems():
+        ret = OrderedDict()
+        for key, varz in self.hfss_variables.items():
             ret[key] = ureg.Quantity(varz['_'+swpvar]).magnitude
         return ret
 
     def get_convergences_max_tets(self):
         ''' Index([u'Pass Number', u'Solved Elements', u'Max Delta Freq. %' ])  '''
-        ret = {}
-        for key, df in self.convergence.iteritems():
+        ret = OrderedDict()
+        for key, df in self.convergence.items():
             ret[key] = df['Solved Elements'].iloc[-1]
         return ret
 
     def get_convergences_Tets_vs_pass(self):
         ''' Index([u'Pass Number', u'Solved Elements', u'Max Delta Freq. %' ])  '''
-        ret = {}
-        for key, df in self.convergence.iteritems():
+        ret = OrderedDict()
+        for key, df in self.convergence.items():
             s = df['Solved Elements']
             #s.index = df['Pass Number']
             ret[key] = s
@@ -712,8 +739,8 @@ class BbqAnalysis(object):
 
     def get_convergences_MaxDeltaFreq_vs_pass(self):
         ''' Index([u'Pass Number', u'Solved Elements', u'Max Delta Freq. %' ])  '''
-        ret = {}
-        for key, df in self.convergence.iteritems():
+        ret = OrderedDict()
+        for key, df in self.convergence.items():
             s = df['Max Delta Freq. %']
             #s.index = df['Pass Number']
             ret[key] = s
@@ -721,15 +748,15 @@ class BbqAnalysis(object):
 
 
     def get_mesh_tot(self):
-        ret = {}
-        for key, m in self.mesh_stats.iteritems():
+        ret = OrderedDict()
+        for key, m in self.mesh_stats.items():
             ret[key] = m['Num Tets  '].sum()
         return ret
 
     def get_solution_column(self, col_name, swp_var, sort = True):
         ''' sort by variation -- must be numeric '''
         Qs, swp = [], []
-        for key, sol in self.sols.iteritems():
+        for key, sol in self.sols.items():
             Qs  += [ sol[col_name] ]
             varz  = self.hfss_variables[key]
             swp += [ ureg.Quantity(varz['_'+swp_var]).magnitude ]
@@ -748,11 +775,11 @@ class BbqAnalysis(object):
         return self.meta_data.loc['junc_rect',:]
 
     def analyze_variation(self,
-                          variation     = '0',
-                          cos_trunc     = 6,
-                          fock_trunc    = 7,
+                          variation,
+                          cos_trunc     = None,
+                          fock_trunc    = None,
                           print_results = True,
-                          frmt          = "{:7.2f}"   ):
+                          frmt          = "{:7.2f}"):
         '''
         Container function to call eBBQ_Pmj_to_H_params
         Can also print results neatly.
@@ -770,6 +797,9 @@ class BbqAnalysis(object):
         EJ [GHz] : Diagonal matrix of junction energies, in GHz.
         '''
 
+        print_color('. '*40, bg = 42, style = 2)
+        print('\t\t Analysing single variation: %s'% variation)
+
         s         = self.sols[variation];
         meta_data = self.meta_data[variation]
         varz      = self.hfss_variables[variation]
@@ -782,15 +812,18 @@ class BbqAnalysis(object):
                                  _renorm_pj = self._renorm_pj)
 
         if print_results: ##TODO: generalize to more modes
+
             print( '\nPJ=\t(renorm.)'  )
             print_matrix(PJ*SIGN, frmt = "{:7.4f}")
             print( "\n","* "*5, "CHI matrix (MHz)", "* "*5)
+
             if cos_trunc is not None:
                 print( '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc))
                 print_matrix(CHI_ND, append_row ="MHz", frmt = frmt)
             else:
                 print( '\nCHI_O1=\t [alpha diag]')
                 print_matrix(CHI_O1, append_row ="MHz", frmt = frmt)
+
             if len(f0s) == 3:
                 print( '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s))
                 print( '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))   )
@@ -799,11 +832,13 @@ class BbqAnalysis(object):
                 print( "\n","* "*5, "Eigen (Linear) vs Dressed Frequencies MHz", "* "*5)
                 print( pd.DataFrame(np.array([f0s*1E3,f1s*1E3]).transpose(), columns = ['Linear', 'Dressed']))
                 #print( "\n", "* "*5, "Dressed freqs Frequencies MHz", "* "*5  # these are the ND if ND was used, else it is the O1PT)
-                #print( )
+
                 print( "\n","* "*5, "Eigen (linear) Qs ", "* "*5)
                 print( pd.Series(Qs))  # Q =0 means no dissipation used in sim.
 
+        #TODO: use dictonary in the future
         return CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz
+    #TODO: add print feature
 
     @deprecated
     def get_swept_variables(self):
