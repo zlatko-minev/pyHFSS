@@ -3,6 +3,11 @@ Welcome to pyEPR!
 ###Energy-Participation-Ratio (EPR) Design of Quantum Circuits. 
 #####By Zlatko Minev & Zaki Leghtas.    
 
+Contributors: Zlatko Minev, Zaki Leghtas, Lysander Christakis, Devin Cody. (Contact Zlatko or Zaki if you wish to contribute). 
+
+Terms of use: Use freely and kindly cite this work and paper (arXiv link to be posted here).
+
+
 About pyEPR. TBA.
 
 # Features
@@ -12,22 +17,22 @@ TBA
 
 ## Installation
 -------------
-If you are starting from scratch, follow the installation guide below to setup a Python 2.7 environment and fork this repository. To keep up to date, you may use SourceTree, a git-gui manager. 
+If you are starting from scratch, follow the installation guide below to setup a Python 2.7 or 3.x environment ant to fork this repository. To keep up to date with this git, you can use SourceTree, a git-gui manager. 
 
 **Recommended procedure.**   <br /> 
 
- 1. Install a Python 2.7 environment.  
-   * We recommend [Anaconda CE](https://www.continuum.io/downloads), and have tested this installation procedure with Anaconda v4.2 32-bit edition. Other environments, such as Python XY, and 64 bit work as well, but are not recommend. Install Anaconda in "C:\Anaconda2".
+ 1. Install a Python 2.7 or 3.x environment. 
+   * We recommend [Anaconda CE](https://www.continuum.io/downloads), and have tested this installation procedure with Anaconda v4.4 64-bit edition on Windows. Other environments, such as Python XY, or 32 bit have been used in the past, and should work too. We assume you will use Anaconda. First, install Anaconda in "C:\Anaconda2". Note if you are using Python 3, remember to change 2 to 3 in the filenames. 
    * Set the Windows System PATH variable. In Control Panel, search for Environment Variables (in System), and open it. In the section System Variables, find the PATH environment variable and select it. Click Edit.  Place`C:\Anaconda2;C:\Anaconda2\Scripts;C:\Anaconda2\Library\bin;` at the beginning. If you have a previous Python installation this step is *very* important, especially to compile the qutip module. You may verity your path using the following command in the Command Prompt (terminal):
       ```sh
       $ echo %PATH%
       ```  
     
- 2. Install required packages, form a terminal
+ 2. Install the required package [pint](http://pint.readthedocs.io/en/latest/). In a terminal window
  ```sh 
- pip install pint
- conda install pandas
+ conda install -c conda-forge pint 
  ```
+   * We also use [pandas](http://pandas.pydata.org/). However, as of Aug. 2017, Anaconda includes the pandas package by default, so you do not need to install it manually. 
  3. Fork this pyEPR repository on GitHub with your GitHub account. You may clone the fork to your PC and manage it using the [SourceTree](https://www.sourcetreeapp.com/) git-gui manager.
  4. Add the pyEPR repository folder to your python search path.
  5. Edit pyEPR module `config.py`  to set your data-saving directory and other parameters of interest.   
@@ -37,9 +42,18 @@ If you are starting from scratch, follow the installation guide below to setup a
 Follow the same instructions above. You shouldn't have to install mingw or modify distutils.cfg, since your distribution should come with gcc as the default compiler.    
 
 ####Optional package installation
-You may also choose to install the optional qutip package for some advanced analysis. 
+You may also choose to install the optional qutip package for some advanced numerical analysis of the Hamiltonian. 
+We use [Qutip](http://qutip.org/) to handle quantum objects. Follow the instruction on their website. As of Aug. 2017, qutip is part of conda, and you can use 
+```sh
+	conda install qutip
+```
+If this doesn't work, try  installing from conda forge
+```sh
+	conda install -c conda-forge qutip
+```
 
-Optionally, you may install [Qutip](http://qutip.org/), used in handling quantum objects. Follow the instruction on their website, or the rest of this bullet. Here, we summarize trick points in this. First, you need to install a C compiler, since Qutip uses Cython. If you dont have VS9, gcc, or mingw installed, the following works:   
+If you wish to install manually, follow the following procedure. Some of this can get a bit tricky at times. 
+First, you need to install a C compiler, since qutip uses Cython. If you dont have VS9, gcc, or mingw installed, the following works:   
 ```sh
 	pip install -i https://pypi.anaconda.org/carlkl/simple mingwpy
 ```
