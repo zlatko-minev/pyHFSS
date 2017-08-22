@@ -1,21 +1,22 @@
 Welcome to pyEPR!
 ===================
-###Energy-Participation-Ratio (EPR) Design of Quantum Circuits. 
-#####By Zlatko Minev & Zaki Leghtas.    
 
-Contributors: Zlatko Minev, Zaki Leghtas, Lysander Christakis, Devin Cody. (Contact Zlatko or Zaki if you wish to contribute). 
+### The energy-participation ratio (EPR) approach to the design of quantum Josephson circuits <br> — the Python package. 
 
-Terms of use: Use freely and kindly cite this work and paper (arXiv link to be posted here).
+##### By Zlatko Minev & Zaki Leghtas.    
 
+* Terms of use: 
+Use freely and kindly cite the paper (arXiv link to be posted here) or this package.
 
-About pyEPR. TBA.
+* Contributors:  Zlatko Minev, Zaki Leghtas, Lysander Christakis, Devin Cody, ... 
+* Join the project!  Contact Zlatko or Zaki if you wish to contribute. 
 
 # Features
 ---------------------
 TBA   
 
 
-## Installation
+# Installation of pyEPR
 -------------
 If you are starting from scratch, follow the installation guide below to setup a Python 2.7 or 3.x environment ant to fork this repository. To keep up to date with this git, you can use SourceTree, a git-gui manager. 
 
@@ -70,7 +71,7 @@ Next, let's install qutip. You can choose to use conda intall or pip install, or
     pip install git+https://github.com/qutip/qutip.git
 ```
 
-## pyEPR Project Setup in HFSS
+# pyEPR Project Setup in HFSS
 -------------
 #### Eigenmode Design --- How to set up junctions
 You may find an advised workflow and some setup tips here.
@@ -84,7 +85,7 @@ You may find an advised workflow and some setup tips here.
    1. We recommend `mixed order` solutions.    
 
 
-## Troubleshooting
+# Troubleshooting pyEPR
 ---------------------
 ###### First run: pint error: system='mks' unkown.
 Please update to pint version newer than 0.7.2. You may use 
