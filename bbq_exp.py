@@ -1,3 +1,4 @@
+from __future__ import print_function    # Python 2.7 and 3 compatibility  
 from hfss import get_active_project
 import bbq
 import matplotlib.pyplot as plt
