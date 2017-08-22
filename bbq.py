@@ -18,7 +18,7 @@ from pint       import UnitRegistry
 # pyEPR imports
 #from hfss       import *
 #from toolbox    import *
-from hfss       import CalcObject
+from hfss       import CalcObject, load_HFSS_project
 from toolbox    import print_NoNewLine, print_color, deprecated, pi, fact, epsilon_0, hbar, fluxQ, nck, \
                        divide_diagonal_by_2, print_matrix
 from config_bbq import root_dir, gseam, th, eps_r, tan_delta_surf, tan_delta_sapp
@@ -40,8 +40,10 @@ class Bbq(object):
         '''
         Example use
         -------------------
-        import bbq
-        app, desktop, project = bbq.load_HFSS_project(project_name, project_path)
+            import bbq
+            app, desktop, project = bbq.load_HFSS_project(project_name, project_path)
+            design                = project.get_active_design()
+            epr                   = bbq.Bbq(project, design, append_analysis=False)
         '''
         self.project = project
         self.design  = design
@@ -409,11 +411,20 @@ class Bbq(object):
             else: print( '  %0.5f' %(dat['pJ_' +junc_rect]))
         return pd.Series(dat)
 
-    def do_eBBQ(self, variations= None, plot_fig  = False, modes      = None,
-               Pj_from_current  = True, junc_rect = [],    junc_lines = None,  junc_len = [],  junc_LJ_var_name = [],
-               dielectrics      = None, seams     = None,  surface    = False,
-               calc_Hamiltonian = False,pJ_method =  'J_surf_mag',
-               save_mesh_stats  = True):
+    def do_eBBQ(self,  variations       = None,
+                       plot_fig         = False,
+                       modes            = None,
+                       Pj_from_current  = True,
+                       junc_rect        = [],
+                       junc_lines       = None,
+                       junc_len         = [],
+                       junc_LJ_var_name = [],
+                       dielectrics      = None,
+                       seams            = None,
+                       surface          = False,
+                       calc_Hamiltonian = False,
+                       pJ_method        =  'J_surf_mag',
+                       save_mesh_stats  = True):
         """
             Pj_from_current:
                 Multi-junction calculation of energy participation ratio matrix based on <I_J>. Current is integrated average of J_surf by default: (zkm 3/29/16)
@@ -437,30 +448,55 @@ class Bbq(object):
             A variation is a combination of project/design variables in an optimetric sweep
         """
 
-        self.Pj_from_current = Pj_from_current;  meta_data = {};  assert(type(junc_LJ_var_name) == list), "Please pass junc_LJ_var_name as a list "
-        if Pj_from_current        :  print_color(' Setup: ' + self.setup.name); self.PJ_multi_sol = {} # this is where the result will go
-        if seams       is not None:  self.seams       = seams;       meta_data['seams']       = seams;
-        if dielectrics is not None:  self.dielectrics = dielectrics; meta_data['dielectrics'] = dielectrics;
-        if variations      is None:  variations = (['-1'] if self.listvariations == (u'',)  else [str(i) for i in range(self.nvariations)] )
-        if modes           is None:  modes = range(self.nmodes)
-        if self.latest_h5_path is not None and self.append_analysis:shutil.copyfile(self.latest_h5_path, self.data_filename);
-        self.h5file     = hdf = pd.HDFStore(self.data_filename);
-        self.variations = variations;  self.modes = modes; self.njunc = len(junc_rect)
-        meta_data['junc_rect'] = junc_rect; meta_data['junc_lines'] = junc_lines; meta_data['junc_len'] = junc_len; meta_data['junc_LJ_var_name'] = junc_LJ_var_name; meta_data['pJ_method'] = pJ_method;
-        mesh_stats = self.mesh_stats = []
+        self.Pj_from_current = Pj_from_current
+        meta_data = {}
+        assert(type(junc_LJ_var_name) == list), "Please pass junc_LJ_var_name as a list "
 
+        if Pj_from_current        :
+            print_color(' Setup: ' + self.setup.name)
+            self.PJ_multi_sol   = {} # this is where the result will go
+        if seams       is not None:
+            self.seams          = seams
+            meta_data['seams']  = seams
+        if dielectrics is not None:
+            self.dielectrics         = dielectrics
+            meta_data['dielectrics'] = dielectrics;
+        if variations      is None:
+            variations = (['-1'] if self.listvariations == (u'',)  else [str(i) for i in range(self.nvariations)] )
+        if modes           is None:
+            modes = range(self.nmodes)
+
+        if self.latest_h5_path is not None and self.append_analysis:
+            shutil.copyfile(self.latest_h5_path, self.data_filename)
+        self.h5file     = hdf = pd.HDFStore(self.data_filename);
+
+        self.variations = variations
+        self.modes      = modes
+        self.njunc      = len(junc_rect)
+        self.mesh_stats = mesh_stats = []
+        meta_data['junc_rect']        = junc_rect
+        meta_data['junc_lines']       = junc_lines
+        meta_data['junc_len']         = junc_len
+        meta_data['junc_LJ_var_name'] = junc_LJ_var_name
+        meta_data['pJ_method']        = pJ_method
+
+        ###  Main loop - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         for ii, variation in enumerate(variations):
+
             print_color( 'variation : ' + variation + ' / ' + str(self.nvariations-1), bg = 44, newline = False )
             self.lv = self.get_lv(variation)
-            if (variation+'/hfss_variables') in hdf.keys() and self.append_analysis: print_NoNewLine('  previously analyzed ...\n');  \
-                continue;
 
-            print_NoNewLine( ' NOT analyzed\n' );  time.sleep(0.5)
+            if (variation+'/hfss_variables') in hdf.keys() and self.append_analysis: print_NoNewLine('  previously analyzed ...\n');  \
+                continue
+
+            print_NoNewLine( ' NOT analyzed\n' )
+            time.sleep(0.5)
             hdf[variation+'/hfss_variables'] = self.hfss_variables[variation] = varz \
                                              = pd.Series(self.get_variables(variation=variation))
             freqs_bare_dict, freqs_bare_vals = self.get_freqs_bare(variation)   # get bare freqs from HFSS
 
-            self.pjs={}; var_sol_accum = []
+            self.pjs      = {}
+            var_sol_accum = []
             for mode in modes:
                 sol = Series({'freq' : freqs_bare_vals[mode]*10**-9, 'modeQ' : freqs_bare_dict['Q_'+str(mode)] })
                 self.omega  = 2*np.pi*freqs_bare_vals[mode] # this should really be passed as argument  to the functions rather than a property of the calss I would say
