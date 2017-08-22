@@ -9,83 +9,66 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from bbq     import BbqAnalysis, print_color, CalcObject, ureg
-from toolbox import DataFrame_col_diff
+from toolbox import DataFrame_col_diff, isint
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+## HFSS design: select
+project_path  = r"C:\\Users\\rslqulab\Desktop\\Lysander\participation_ratio_project\\Shyam's autonomous stabilization simulations\\"
+project_name  = r'2017-08 Zlakto - (2013-11-21-2013-04-24_cooldown_2qubit)' # r'2013-11-21-2013-04-24_cooldown_2qubit'
+design_name   = r'01b - 2qubit device EM'
+
+## HFSS desgin: describe junction parameters
+junc_rects    = ['qubitAlice','qubitBob'] #['juncH','juncV']           # Name of junction rectangles in HFSS
+junc_lines    = ['alice_line','bob_line']#['juncH_line','juncV_line']  # Name of lines in HFSS used to define the current orientation for each junction
+junc_LJ_names = ['LJAlice','LJBob'] #['LJ2','LJ1']               # Name of junction inductance variables in HFSS. DO NOT SUSE Global names that start with $.
+junc_lens     = [0.0001]*2                   # This is in meters
+
+## Analaysis:
+swp_var       = 'indshiftB' #'inductance_shift'  # the name of the swept variable set to None if none
+cos_trunc     = 10
+fock_trunc    = 7
 
 if 1:
-    ### Select design
-    project_path  = r"C:\\Users\\rslqulab\Desktop\\Lysander\participation_ratio_project\\Shyam's autonomous stabilization simulations\\"
-    project_name  = r'2017-08 Zlakto - (2013-11-21-2013-04-24_cooldown_2qubit)' # r'2013-11-21-2013-04-24_cooldown_2qubit'
-    design_name   = r'01b - 2qubit device EM'
-
-    ### Describe junction parameters
-    junc_rects    = ['qubitAlice','qubitBob'] #['juncH','juncV']           # Name of junction rectangles in HFSS
-    junc_lines    = ['alice_line','bob_line']#['juncH_line','juncV_line']  # Name of lines in HFSS used to define the current orientation for each junction
-    junc_LJ_names = ['LJAlice','LJBob'] #['LJ2','LJ1']               # Name of junction inductance variables in HFSS. DO NOT SUSE Global names that start with $.
-    junc_lens     = [0.0001]*2                   # This is in meters
-    # Analaysis (piost HFSS, for numerical diagonalization)
-    cos_trunc     = 10
-    fock_trunc    = 7
-
-    ### Run - connect to HFSS
+    ## Run:         Connect to HFSS & analyze
     app, desktop, project = bbq.load_HFSS_project(project_name, project_path)
     design = project.get_design(design_name) if design_name != None else project.get_active_design()
 
-    ### Run - do BBQ
     bbp = bbq.Bbq(project, design, append_analysis=False)
     bbp.do_eBBQ(junc_rect=junc_rects, junc_lines = junc_lines,  junc_len = junc_lens, junc_LJ_var_name = junc_LJ_names)
 
-    ### Collect results
-    #bba           = bbp.bbq_analysis
-    bba            = BbqAnalysis(bbp.data_filename) # load the data
+
+if 1:
+    ## Load results
+    bba            = BbqAnalysis(bbp.data_filename) # load the data (alternativly, could use  bbp.bbq_analysis)
     sol            = bba.sols
     meta_datas     = bba.meta_data
     hfss_variables = bba.hfss_variables
 
-#%% ANALYSIS
-if 1:
-    hfss_variables = pd.DataFrame(hfss_variables)
-    print_color('. '*40, bg = 42, style = 2)
-    print("Differences in variations:" )
-    print(hfss_variables[DataFrame_col_diff(hfss_variables)])
-    #print("Available variations: ", bba.variations)
-
-
-if 1: # Analyze a single variation
-    variation = '0'
+if 0: # Analyze a single variation
+    variation = None
     CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs, varz = \
-        bba.analyze_variation(variation = variation, cos_trunc = cos_trunc, fock_trunc  = fock_trunc)
-#    s         = sol[variation];
-#    meta_data = meta_datas[variation]
-#    varz      = hfss_variables[variation]
-#    CHI_O1, CHI_ND, PJ, Om, EJ, diff, LJs, SIGN, f0s, f1s, fzpfs, Qs = \
-#        eBBQ_Pmj_to_H_params(s, meta_data, cos_trunc = cos_trunc, fock_trunc = fock_trunc)
-#
-#    print '\nPJ=\t(renorm.)';        print_matrix(PJ*SIGN, frmt = "{:7.4f}")
-#    #print '\nCHI_O1=\t PT. [alpha diag]'; print_matrix(CHI_O1,append_row ="MHz" )
-#    print '\nf0={:6.2f} {:7.2f} {:7.2f} GHz'.format(*f0s)
-#    print '\nCHI_ND=\t PJ O(%d) [alpha diag]'%(cos_trunc); print_matrix(CHI_ND, append_row ="MHz")
-#    print '\nf1={:6.2f} {:7.2f} {:7.2f} GHz'.format(*(f1s*1E-9))
-#    print 'Q={:8.1e} {:7.1e} {:6.0f}'.format(*(Qs))
-    #print pd.Series({ key:varz[key] for key in ['_join_w','_join_h','_padV_width', '_padV_height','_padH_width', '_padH_height','_scaleV','_scaleH', '_LJ1','_LJ2'] })
+        bba.analyze_variation('0', cos_trunc = cos_trunc, fock_trunc  = fock_trunc)
 
-#%%==============================================================================
-#     Plot results for sweep
-#==============================================================================
+#%% ANALYZE ALL VARIATIONS  ==============================================================================
 if 1:
-    swpvar='inductance_shift'
-    use_1st_order = True  # use 1st O PT  to identify correct eigenvectors in ND
-    RES = []
-    SWP = []
-    for key, s in sol.iteritems():
-        print( '\r Analyzing ', key,)
-        try:
-            varz  = hfss_variables[key]
-            SWP  += [ ureg.Quantity(varz['_'+swpvar]).magnitude ]
-            RES  += [ bbq.eBBQ_Pmj_to_H_params(s, meta_datas[key], cos_trunc = cos_trunc, fock_trunc = fock_trunc, use_1st_order = False) ]
-        except Exception as e:
-            print_color(" !ERROR %s" % e)
+    if swp_var is not None:
+        RES = []
+        SWP = []
+        for key, s in sol.items():
+            print( '\r Analyzing ', key,)
+            try:
+                SWP  += [ ureg.Quantity(hfss_variables[key]['_'+swp_var]).magnitude ]
+                RES  += [ bbq.eBBQ_Pmj_to_H_params(s,  meta_datas[key],
+                                                   cos_trunc  = cos_trunc,
+                                                   fock_trunc = fock_trunc,
+                                                   use_1st_order = False) ]
+            except Exception as e:
+                print_color(" ! ERROR %s" % e)
+
+
+#%% PLOT ALL VARIATIONS  ==============================================================================
+if 1:
     import matplotlib.gridspec as gridspec;
-    #%%
     fig = plt.figure(num = 1, figsize=(19,5))
     gs1 = gridspec.GridSpec(1, 4, width_ratios=[2,2,2,1]); gs1.update(left=0.05, right=0.98)  # wspace=0.05
     ax1 = plt.subplot(gs1[0]); ax2 = plt.subplot(gs1[1]); ax3 = plt.subplot(gs1[2]); ax3b = plt.subplot(gs1[3])
@@ -95,7 +78,7 @@ if 1:
     ax.plot(SWP, [r[ID][0,1]for r in RES], label = '$\\chi_{DB}$', **args)
     ax.plot(SWP, [r[ID][0,2]for r in RES], label = '$\\chi_{DC}$', **args)
     ax.plot(SWP, [r[ID][1,2]for r in RES], label = '$\\chi_{BC}$', **args)
-    ax.set_ylim([0.01,10**2]); ax.set_xlabel(swpvar); ax.set_title('cross-Kerr'); ax.set_ylabel('$\\chi$ (MHz)'); ax.legend(loc = 0)
+    ax.set_ylim([0.01,10**2]); ax.set_xlabel(swp_var); ax.set_title('cross-Kerr'); ax.set_ylabel('$\\chi$ (MHz)'); ax.legend(loc = 0)
     ax.set_yscale('log');   ax.set_ylim(0.1,100)
     ax1.axhspan(5.5,6.5, alpha =0.4, color= 'b')
     ax1.axhline(0.5, alpha =0.4, color= 'b')
@@ -104,16 +87,16 @@ if 1:
     ax.plot(SWP, [r[ID][0,0] for r in RES], label = '$\\alpha_{D}$', **args)
     ax.plot(SWP, [r[ID][1,1] for r in RES], label = '$\\alpha_{B}$', **args)
     ax.plot(SWP, [r[ID][2,2] for r in RES], label = '$\\alpha_{C}$', **args)
-    ax.set_ylim([100 +0.01,3.5*10**2]); ax.set_xlabel(swpvar); ax.set_title('Anharmonicity');ax.set_ylabel('$\\alpha$ (MHz)'); ax.legend(loc = 0)
+    ax.set_ylim([100 +0.01,3.5*10**2]); ax.set_xlabel(swp_var); ax.set_title('Anharmonicity');ax.set_ylabel('$\\alpha$ (MHz)'); ax.legend(loc = 0)
     ax.set_yscale('linear')
     ax.axhline(5.238)
     ax = ax3;
     ax.plot(SWP, [r[9][:2]*10**-9 for r in RES],  **args)
     ax.plot(SWP, [r[8][:2]        for r in RES],  **{'lw':0,'marker':'x','ms':3})
-    ax.set_xlabel(swpvar); ax.set_ylabel('Freq1 (GHz)'); ax.set_title('Freq.'); ax.legend(['D','B','C'], loc= 0); ax.grid(axis='y',color='gray', linestyle='-', linewidth=0.8, alpha =0.4)
+    ax.set_xlabel(swp_var); ax.set_ylabel('Freq1 (GHz)'); ax.set_title('Freq.'); ax.legend(['D','B','C'], loc= 0); ax.grid(axis='y',color='gray', linestyle='-', linewidth=0.8, alpha =0.4)
     ax = ax3b
     ax.plot(SWP, [r[11] for r in RES],  **args)
-    ax.set_xlabel(swpvar); ax.set_ylabel('Q'); ax.legend(['D','B','C'], loc = 0)
+    ax.set_xlabel(swp_var); ax.set_ylabel('Q'); ax.legend(['D','B','C'], loc = 0)
     try:
         ax.set_yscale('log')
     except Exception as e:
@@ -132,18 +115,18 @@ if 0:
     ax = ax5
     ax.plot(SWP, [r[ID][0,1] for r in RES], label = '$P_{DV}$', **args)
     ax.plot(SWP, [r[ID][1,0] for r in RES], label = '$P_{BH}$', **args)
-    ax.set_xlabel(swpvar); ax.set_ylabel('Participation'); ax.legend(loc = 0)
+    ax.set_xlabel(swp_var); ax.set_ylabel('Participation'); ax.legend(loc = 0)
     ax = ax6
     ax.plot(SWP, [r[ID][2,0] for r in RES], label = '$P_{CH}$', **args)
     ax.plot(SWP, [r[ID][2,1] for r in RES], label = '$P_{CV}$', **args)
-    ax.set_yscale('log'); ax.set_xlabel(swpvar); ax.set_ylabel('Participation'); ax.legend(loc = 0)
+    ax.set_yscale('log'); ax.set_xlabel(swp_var); ax.set_ylabel('Participation'); ax.legend(loc = 0)
 
     ax   = plt.subplot(gs1[1,0]); ID =1;
     chiDC = np.array([r[ID][0,2] for r in RES])
     chiDB = np.array([r[ID][0,1] for r in RES])
     #print_color("chiDB/chiDC ratios:"); print  chiDB/chiDC
     ax.plot(SWP, chiDB/chiDC, **args); ax.locator_params(nbins=4); ax.grid(); ax.set_ylabel('$\\chi_{DB}/\\chi_{DC}$')
-    ax.set_xlabel(swpvar);
+    ax.set_xlabel(swp_var);
 
     # plot the chis again
     plt.close(3);   ID = 1;
@@ -152,7 +135,7 @@ if 0:
 #    ax7.plot(SWP, [r[ID][0,1]for r in RES], label = '$\\chi_{DB}$', c = 'b', **args); ax7.set_ylabel('$\\chi_{DB}$ (MHz)');
 #    ax9.plot(SWP, [r[ID][0,2]for r in RES], label = '$\\chi_{DC}$', c = 'g', **args); ax9.set_ylabel('$\\chi_{DC}$ (MHz)');
 #    ax8.plot(SWP, [r[ID][1,2]for r in RES], label = '$\\chi_{BC}$', c = 'r', **args); ax8.set_ylabel('$\\chi_{BC}$ (MHz)');
-#    ax9.set_xlabel(swpvar); ax7.set_title('cross-Kerr');
+#    ax9.set_xlabel(swp_var); ax7.set_title('cross-Kerr');
 #    #ax7.axhspan(85,150,  alpha =0.4, color= 'b')
 #    ax8.axhspan(5.5,6.5, alpha =0.4, color= 'b')
 #    ax9.axhline(0.5,     alpha =0.4, color= 'b')
@@ -173,7 +156,7 @@ if 1:
     ax7.plot(SWP, [r[ID][0,1]for r in RES], label = '$\\chi_{DB}$', c = 'b', **args); ax7.set_ylabel('$\\chi_{DB}$ (MHz)');
     ax9.plot(SWP, [r[ID][0,2]for r in RES], label = '$\\chi_{DC}$', c = 'g', **args); ax9.set_ylabel('$\\chi_{DC}$ (MHz)');
     ax8.plot(SWP, [r[ID][1,2]for r in RES], label = '$\\chi_{BC}$', c = 'r', **args); ax8.set_ylabel('$\\chi_{BC}$ (MHz)');
-    ax9.set_xlabel(swpvar); ax7.set_title('cross-Kerr');
+    ax9.set_xlabel(swp_var); ax7.set_title('cross Kerr');
     #ax7.axhspan(85,150,  alpha =0.4, color= 'b')
     ax8.axhspan(5.5,6.5, alpha =0.4, color= 'b')
     ax9.axhline(0.5,     alpha =0.4, color= 'b')
@@ -183,7 +166,7 @@ if 1:
 if 1: # plot mesh
     fig = plt.figure(8);  fig.clf()
     tets = bba.get_convergences_max_tets()
-    varsz  = bba.get_variable_vs(swpvar)
+    varsz  = bba.get_variable_vs(swp_var)
     Y = {}
     for key in tets.keys():
         Y[varsz[key]] = tets[key]
@@ -195,7 +178,7 @@ if 1: # plot mesh
 if 1:
     fig = plt.figure(21); fig.clf()
     tts = bba.get_convergences_Tets_vs_pass()
-    for key, x in tts.iteritems():
+    for key, x in tts.items():
         #np.log10(x).plot(label = varsz[key])
         x.plot(label = varsz[key])
     plt.legend(loc = 0)
