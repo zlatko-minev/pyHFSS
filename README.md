@@ -1,8 +1,8 @@
-OUTDATED 
+ARCHIVE Repo only. 
 ===================
-OUTDATED --- This project evolved into pyEPR.
+ARCHIVE --- This project is now outdated and superseded by pyEPR.
 
-New project: pyEPR 
+SEE INSTEAD:  pyEPR 
 ===================
 See pyEPR instead
-https://github.com/zlatkom/pyEPR                                                                                                                                                                       
+https://github.com/zlatko-minev/pyEPR                                                                                                                                                                       
